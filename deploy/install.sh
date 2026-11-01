@@ -38,20 +38,16 @@ if ! ip -6 route show default 2>/dev/null | grep -q .; then
   echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99gastosbyath-ipv4
 fi
 apt-get update -qq
-apt-get install -y -qq curl ca-certificates rsync tar python3 make g++ >/dev/null
+apt-get install -y -qq curl ca-certificates rsync tar >/dev/null
 
-# Node.js 20 o superior (better-sqlite3 trae binarios precompilados para estas versiones).
+# Node.js 20 o superior con npm. Si falta, o es el de Debian (que viene sin npm), se pone el 22 de NodeSource,
+# que trae npm en un solo paquete (el npm de Debian son cientos de paquetes y tarda mucho).
 NODE_MAJOR=0
 command -v node >/dev/null && NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-if [ "$NODE_MAJOR" -lt 20 ]; then
-  say "Instalando Node.js 22 LTS"
+if [ "$NODE_MAJOR" -lt 20 ] || ! command -v npm >/dev/null; then
+  say "Instalando Node.js 22 LTS con npm (con una conexión lenta tarda unos minutos)"
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
-  apt-get install -y -qq nodejs >/dev/null
-fi
-# El Node.js de Debian viene sin npm (el de NodeSource ya lo trae).
-if ! command -v npm >/dev/null; then
-  say "Instalando npm"
-  apt-get install -y -qq npm >/dev/null
+  apt-get install -y -q nodejs
 fi
 command -v node >/dev/null && command -v npm >/dev/null \
   || { echo "No se ha podido instalar Node.js y npm. Revisa la conexión a internet y vuelve a ejecutar este script."; exit 1; }
@@ -70,7 +66,14 @@ fi
 say "Copiando la aplicación a $APP_DIR"
 rsync -a --delete --exclude node_modules --exclude data --exclude .git --exclude tests "$SRC_DIR/" "$APP_DIR/"
 cd "$APP_DIR"
-npm ci --omit=dev --no-audit --no-fund
+say "Instalando las librerías de la app (con una conexión lenta tarda varios minutos: no lo interrumpas)"
+NPM_CI=(npm ci --omit=dev --no-audit --no-fund --fetch-retries=5 --fetch-retry-maxtimeout=120000)
+if ! "${NPM_CI[@]}"; then
+  # No hay versión ya compilada de SQLite para este sistema: hace falta compilarla.
+  say "Instalando herramientas de compilación y reintentando"
+  apt-get install -y -q python3 make g++
+  "${NPM_CI[@]}"
+fi
 chown -R gastosbyath:gastosbyath "$DATA_DIR"
 chown -R root:root "$APP_DIR"
 

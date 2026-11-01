@@ -187,9 +187,15 @@ git clone --config remote.origin.pushurl=no-push https://github.com/altorrecilla
 bash /root/gastosbyath/deploy/install.sh
 ```
 
-Tarda 2 o 3 minutos y termina con `==> GastosbyATH está funcionando en el puerto 8080` y la dirección para
-abrirla (`http://<IP>:8080`). Si se corta a medias (por ejemplo, por la conexión), vuelve a ejecutar la última
-orden: retoma donde se quedó.
+Tarda unos minutos (más con una conexión lenta) y termina con `==> GastosbyATH está funcionando en el puerto 8080`
+y la dirección para abrirla (`http://<IP>:8080`). Si se corta a medias (por ejemplo, por la conexión), vuelve a
+ejecutar la última orden: retoma donde se quedó.
+
+Si parece parado en un paso de instalación de paquetes, casi seguro está descargando. **No lo canceles** (cortar
+`apt` a medias deja paquetes a medio instalar). Para verlo, abre otra consola del contenedor (en la *Shell* del
+host, `pct enter 120`) y ejecuta `tail -f /var/log/dpkg.log`: si van saliendo líneas, está trabajando
+(`Ctrl+C` cierra solo esa vista). Si de verdad no se mueve nada en 15 minutos, cancélalo con `Ctrl+C`, ejecuta
+`dpkg --configure -a` y vuelve a lanzar el instalador.
 
 Avisos que puedes ignorar:
 
@@ -197,6 +203,9 @@ Avisos que puedes ignorar:
   hace que `apt` use solo IPv4 a partir de ese momento; para descargar ya los parches de seguridad, ejecuta
   después `apt update && apt upgrade -y`.
 - `WARNING: apt does not have a stable CLI interface`: lo escribe siempre el instalador de Node.js.
+- `npm WARN tar TAR_ENTRY_ERROR EINVAL: invalid argument, fchown`: en un contenedor sin privilegios npm no puede
+  poner a los archivos el dueño que traían de origen; se instalan bien igual.
+- `npm WARN deprecated prebuild-install`: es la herramienta que descarga SQLite ya compilado; funciona.
 
 El contenedor solo **descarga** de GitHub: no tiene ninguna clave de GitHub y `pushurl=no-push` hace que cualquier
 `git push` falle. Los datos viven en `/var/lib/gastosbyath`, fuera de la carpeta de git, así que no pueden acabar
