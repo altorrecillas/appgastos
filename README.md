@@ -136,6 +136,16 @@ Cada prueba arranca su propio servidor con datos temporales: nunca toca los dato
 navegador usan el Chromium del sistema (`apt install chromium`); si no está, se saltan.
 Más detalles en [tests/README.md](tests/README.md).
 
+### Subir cambios a GitHub
+
+```bash
+bash subir-a-github.sh "Qué ha cambiado"     # revisa, pasa las pruebas, guarda y sube
+bash subir-a-github.sh --comprobar           # solo revisa, sin subir nada
+```
+
+Antes de subir comprueba que los commits salen con el correo anónimo de GitHub, que no va ningún dato de la app
+y que no aparece nada de lo que pongas en `.datos-privados` (tu nombre, correos, teléfono…; ese archivo no se sube).
+
 ## Instalar en Proxmox
 
 ### Opción A · Desde GitHub (recomendada)

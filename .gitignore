@@ -24,3 +24,6 @@ Thumbs.db
 *.swp
 .vscode/
 .idea/
+
+# Palabras que nunca deben llegar a GitHub (solo en tu equipo)
+.datos-privados
