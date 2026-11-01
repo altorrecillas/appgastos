@@ -10,7 +10,14 @@ SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$SRC_DIR"
 [ -d .git ] || { echo "$SRC_DIR no viene de GitHub (falta .git): instálalo con git clone."; exit 1; }
 
+# Este contenedor solo descarga: cualquier «git push» desde aquí falla (los datos nunca van a GitHub).
+git config remote.origin.pushurl no-push
 BEFORE="$(git rev-parse HEAD)"
+# Si se volvió a una versión anterior (git checkout <versión>), se regresa a la rama principal.
+if ! git symbolic-ref -q HEAD >/dev/null; then
+  echo "Estabas en una versión anterior: vuelvo a la última."
+  git checkout -q main
+fi
 if ! git pull --ff-only --quiet; then
   echo "No se ha podido actualizar: hay cambios hechos a mano en $SRC_DIR (míralos con «git status»)."
   exit 1

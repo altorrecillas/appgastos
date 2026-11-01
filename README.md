@@ -136,70 +136,75 @@ Cada prueba arranca su propio servidor con datos temporales: nunca toca los dato
 navegador usan el Chromium del sistema (`apt install chromium`); si no está, se saltan.
 Más detalles en [tests/README.md](tests/README.md).
 
-### Subir cambios a GitHub
+## Instalar en un contenedor de Proxmox
+
+Se tarda unos 10 minutos. Al final tendrás:
+
+| Dónde | Qué |
+|---|---|
+| `/root/gastosbyath` | el código descargado de GitHub (de aquí salen las actualizaciones) |
+| `/opt/gastosbyath` | la aplicación instalada |
+| `/var/lib/gastosbyath` | **tus datos**: base de datos, fotos y copias de seguridad |
+| `/etc/gastosbyath.env` | los ajustes (puerto, registro abierto…); las actualizaciones no lo tocan |
+| servicio `gastosbyath` | arranca solo al encender el contenedor |
+| `gastosbyath-backup.timer` | copia de seguridad cada noche a las 3:30 |
+
+### 1. Crear el contenedor
+
+En la web de Proxmox, *Create CT*:
+
+| Pestaña | Valor |
+|---|---|
+| General | Hostname `gastosbyath` (será su nombre en Tailscale), contraseña de root, ✔ *Unprivileged container*, ✔ *Nesting* |
+| Template | `debian-13-standard` o `debian-12-standard` |
+| Disks | 8 GB (las copias guardan cada foto una sola vez; se puede ampliar después) |
+| CPU | 2 núcleos |
+| Memory | 1024 MB de RAM y 512 MB de swap |
+| Network | IPv4 por DHCP (o una IP fija) |
+| Confirm | desmarca *Start after created* |
+
+Apunta el número que le da Proxmox (por ejemplo `120`): se usa en el paso 2.
+
+### 2. Permitir Tailscale (en la *Shell* del host)
+
+Es lo único que se hace fuera del contenedor. Cambia `120` por el número del tuyo:
 
 ```bash
-bash subir-a-github.sh "Qué ha cambiado"     # revisa, pasa las pruebas, guarda y sube
-bash subir-a-github.sh --comprobar           # solo revisa, sin subir nada
+cat >> /etc/pve/lxc/120.conf <<'EOF'
+lxc.cgroup2.devices.allow: c 10:200 rwm
+lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+EOF
+pct start 120
 ```
 
-Antes de subir comprueba que los commits salen con el correo anónimo de GitHub, que no va ningún dato de la app
-y que no aparece nada de lo que pongas en `.datos-privados` (tu nombre, correos, teléfono…; ese archivo no se sube).
+### 3. Instalar la app (en la consola del contenedor)
 
-## Instalar en Proxmox
-
-### Opción A · Desde GitHub (recomendada)
-
-1. En Proxmox, *Create CT*: plantilla Debian 12, sin privilegios, *Nesting* activado, 1 GB de RAM,
-   8 GB de disco y red por DHCP. No lo arranques todavía.
-2. Para poder usar Tailscale, en la *Shell* del host (cambia `120` por el número del contenedor):
-
-   ```bash
-   cat >> /etc/pve/lxc/120.conf <<'EOF'
-   lxc.cgroup2.devices.allow: c 10:200 rwm
-   lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
-   EOF
-   ```
-
-3. Arranca el contenedor y, en su consola, como root:
-
-   ```bash
-   apt update && apt install -y git
-   git clone https://github.com/altorrecillas/gastosbyath.git /root/gastosbyath
-   bash /root/gastosbyath/deploy/install.sh
-   ```
-
-Instala Node.js si hace falta, deja la app en `/opt/gastosbyath`, los datos en `/var/lib/gastosbyath`,
-crea el servicio `gastosbyath` (arranca solo) y una copia de seguridad diaria a las 3:30.
-
-**Para actualizar** a la última versión de GitHub:
+En Proxmox, el contenedor → *Console*, entra como `root` y ejecuta:
 
 ```bash
-bash /root/gastosbyath/deploy/actualizar.sh
+apt update && apt install -y git
+git clone --config remote.origin.pushurl=no-push https://github.com/altorrecillas/appgastos.git /root/gastosbyath
+bash /root/gastosbyath/deploy/install.sh
 ```
 
-Si no hay nada nuevo no toca nada. Si lo hay, enseña las novedades, hace una copia de seguridad de los datos,
-instala la versión nueva, reinicia el servicio y comprueba que responde. Los datos no se tocan.
+Tarda 2 o 3 minutos y termina con `==> GastosbyATH está funcionando en el puerto 8080` y la dirección para
+abrirla (`http://<IP>:8080`). Si se corta a medias (por ejemplo, por la conexión), vuelve a ejecutar la última
+orden: retoma donde se quedó.
 
-### Opción B · Crear el contenedor automáticamente (en el host Proxmox)
+Avisos que puedes ignorar:
 
-Copia esta carpeta al host y ejecuta como root:
+- `W: Failed to fetch http://security.debian.org/… Network is unreachable`: tu red no tiene IPv6. El instalador
+  hace que `apt` use solo IPv4 a partir de ese momento; para descargar ya los parches de seguridad, ejecuta
+  después `apt update && apt upgrade -y`.
+- `WARNING: apt does not have a stable CLI interface`: lo escribe siempre el instalador de Node.js.
 
-```bash
-bash deploy/proxmox-create-ct.sh
-# Opcional: CTID=120 CT_NAME=gastosbyath STORAGE=local-lvm MEMORY=1024 DISK=8 bash deploy/proxmox-create-ct.sh
-```
+El contenedor solo **descarga** de GitHub: no tiene ninguna clave de GitHub y `pushurl=no-push` hace que cualquier
+`git push` falle. Los datos viven en `/var/lib/gastosbyath`, fuera de la carpeta de git, así que no pueden acabar
+en GitHub.
 
-Crea un LXC Debian 12 sin privilegios, le da acceso a `/dev/net/tun` (necesario para Tailscale),
-copia la aplicación e instala todo.
+### 4. Acceso con Tailscale (y HTTPS)
 
-### Opción C · Copiando la carpeta a un contenedor que ya tengas
-
-Dentro del contenedor (Debian 12/13 o Ubuntu), como root y desde esta carpeta: `bash deploy/install.sh`.
-Para actualizar, copia la versión nueva encima y vuelve a ejecutarlo. Para Tailscale, añade al
-`/etc/pve/lxc/<ID>.conf` del host las dos líneas del paso 2 de la opción A y reinicia el contenedor.
-
-### Acceso con Tailscale (y HTTPS)
+En la consola del contenedor:
 
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
@@ -207,14 +212,32 @@ tailscale up
 tailscale serve --bg 8080
 ```
 
-Entra desde cualquier dispositivo de tu tailnet en `https://<contenedor>.<tu-tailnet>.ts.net`.
-Con HTTPS funcionan además las **notificaciones push** y la instalación como app:
+`tailscale up` te da un enlace para autorizar el contenedor en tu cuenta. Si es la primera vez que usas HTTPS en
+tu tailnet, `tailscale serve` te dará otro para activarlo. Después entra desde cualquier dispositivo de tu
+tailnet en `https://gastosbyath.<tu-tailnet>.ts.net` (con el hostname que pusiste en el paso 1).
 
-- Android: menú del navegador → *Instalar aplicación*.
-- iPhone: Safari → Compartir → *Añadir a pantalla de inicio* (las notificaciones en iOS solo
-  funcionan con la app añadida a la pantalla de inicio).
+### 5. Primeros pasos
 
-Después actívalas en *Recordatorios* o *Ajustes → Notificaciones* en cada dispositivo.
+1. Abre la app y crea tu cuenta: la primera es la administradora. Un asistente te ayuda a preparar el hogar.
+2. Invita a la familia en *Ajustes → Miembros → Invitar con un código*: cada persona se registra en la misma
+   dirección y pulsa «Unirme con un código».
+3. Cuando todos tengan cuenta, cierra el registro: en la consola del contenedor, `nano /etc/gastosbyath.env`,
+   pon `ALLOW_REGISTRATION=false`, guarda y ejecuta `systemctl restart gastosbyath`. Los códigos de
+   invitación siguen funcionando.
+4. En el móvil, instálala como app (con HTTPS funcionan además las **notificaciones**):
+   - Android: menú del navegador → *Instalar aplicación*.
+   - iPhone: Safari → Compartir → *Añadir a pantalla de inicio* (en iOS las notificaciones solo funcionan con
+     la app añadida a la pantalla de inicio).
+
+   Después activa los avisos en *Recordatorios* o *Ajustes → Notificaciones* en cada dispositivo.
+
+### Otras formas de instalar
+
+- **Todo automático desde el host:** copia esta carpeta al host y ejecuta `bash deploy/proxmox-create-ct.sh`
+  (opcional: `CTID=120 CT_NAME=gastosbyath STORAGE=local-lvm MEMORY=1024 DISK=8`). Crea el contenedor, hace el
+  paso 2 e instala la app copiando la carpeta (sin GitHub; para actualizar hay que volver a copiarla).
+- **Sin GitHub, en un contenedor que ya tengas:** copia esta carpeta dentro y ejecuta `bash deploy/install.sh`.
+  Para actualizar, copia la versión nueva encima y vuelve a ejecutarlo.
 
 ### Conectar Home Assistant
 
@@ -231,13 +254,65 @@ guarda cifrado (AES-256-GCM, clave en `DATA_DIR/secret.key`) y no se envía nunc
 administradores del hogar pueden cambiar la conexión. Se lee cada 15 minutos (configurable) y los días ya
 incluidos en una factura de la luz no se tocan. Si el enchufe pierde la wifi, ese hueco no suma consumo.
 
+## Actualizar
+
+### 1. Subir los cambios a GitHub (en tu ordenador)
+
+En la carpeta del proyecto:
+
+```bash
+bash subir_a_github.sh
+```
+
+Te pide un mensaje que describa el cambio (es lo que verás como «novedades» al actualizar), hace el commit y lo sube.
+
+### 2. Actualizar el contenedor (en su consola)
+
+```bash
+bash /root/gastosbyath/deploy/actualizar.sh
+```
+
+Lo que hace, en orden:
+
+1. Descarga lo nuevo de GitHub. Si no hay nada nuevo, te lo dice y no toca nada.
+2. Te enseña las novedades (los mensajes de los commits).
+3. Hace una copia de seguridad de la base de datos y de las fotos, por si la versión nueva cambia la base de datos.
+4. Instala la versión nueva en `/opt/gastosbyath`, reinicia el servicio y comprueba que responde.
+
+Tus datos (`/var/lib/gastosbyath`) y tus ajustes (`/etc/gastosbyath.env`) no se tocan. En los móviles, la app
+se pone al día la próxima vez que se abre; si ves algo raro, ciérrala del todo y vuelve a abrirla.
+
+`bash /root/gastosbyath/deploy/actualizar.sh --forzar` reinstala aunque no haya nada nuevo: por ejemplo, después
+de cambiar el puerto o la carpeta de datos en `/etc/gastosbyath.env`.
+
+### Si algo sale mal
+
+| Mensaje | Qué hacer |
+|---|---|
+| `hay cambios hechos a mano en /root/gastosbyath` | Alguien ha editado archivos ahí. Míralos con `git -C /root/gastosbyath status`; para descartarlos, `git -C /root/gastosbyath reset --hard` y vuelve a actualizar. |
+| `El servicio no responde` | Mira el motivo con `journalctl -u gastosbyath -n 50`. |
+| La versión nueva funciona mal | Vuelve a la anterior (abajo) mientras se arregla. |
+
+Para volver a la versión anterior:
+
+```bash
+cd /root/gastosbyath
+git log --oneline -5          # la primera línea es la versión actual; la segunda, la anterior
+git checkout 1a2b3c4          # el código de la versión a la que quieres volver
+bash deploy/install.sh
+```
+
+Si la versión nueva había cambiado la base de datos, restaura también la copia que se hizo justo antes de
+actualizar (ver *Copias de seguridad*: es la `gastosbyath-….db` más reciente de antes de la actualización).
+Para volver después a la última versión, basta con `bash /root/gastosbyath/deploy/actualizar.sh`.
+
 ## Copias de seguridad
 
 - Automáticas, cada noche a las 3:30, en `/var/lib/gastosbyath/backups`: la base de datos entera (se guardan las
   30 últimas, `gastosbyath-AAAA-MM-DD-HH-MM-SS.db`) y la carpeta `adjuntos/`, donde cada foto o PDF se copia una
   sola vez. Así las copias ocupan poco: lo que ocupen tus fotos, más 30 veces la base de datos (que es pequeña).
   Una foto que borres en la app se queda en `adjuntos/` mientras alguna de esas 30 copias la use.
-- Manual: `sudo -u gastosbyath DATA_DIR=/var/lib/gastosbyath node /opt/gastosbyath/scripts/backup.js`
+- Manual: `runuser -u gastosbyath -- env DATA_DIR=/var/lib/gastosbyath node /opt/gastosbyath/scripts/backup.js`
 - Por hogar: *Ajustes → Copias y datos → Descargar copia (JSON)*, que también sirve para pasar los
   datos a otro servidor (*Cargar una copia*).
 
@@ -247,12 +322,13 @@ carpeta de datos solo está `cuartos.db`, al arrancar se renombra sola a `gastos
 Para restaurar una copia completa (elige la fecha en el nombre del archivo; la hora va en UTC):
 
 ```bash
-sudo systemctl stop gastosbyath
+systemctl stop gastosbyath
 cd /var/lib/gastosbyath
-sudo -u gastosbyath cp backups/gastosbyath-2026-11-01-02-30-00.db gastosbyath.db
-sudo -u gastosbyath rm -f gastosbyath.db-wal gastosbyath.db-shm
-sudo -u gastosbyath cp -r backups/adjuntos/. uploads/
-sudo systemctl start gastosbyath
+ls backups/                    # elige la copia por su fecha
+runuser -u gastosbyath -- cp backups/gastosbyath-2026-11-01-02-30-00.db gastosbyath.db
+runuser -u gastosbyath -- rm -f gastosbyath.db-wal gastosbyath.db-shm
+runuser -u gastosbyath -- cp -r backups/adjuntos/. uploads/
+systemctl start gastosbyath
 ```
 
 Si restauras en un contenedor nuevo, copia también `secret.key` y `vapid.json` de la carpeta de datos antigua
@@ -269,10 +345,15 @@ solas a medida que caducan sus copias de la base de datos.
 |---|---|
 | Estado | `systemctl status gastosbyath` |
 | Registro | `journalctl -u gastosbyath -f` |
-| Actualizar | `bash /root/gastosbyath/deploy/actualizar.sh` (instalado desde GitHub) o copia la versión nueva y `bash deploy/install.sh` |
-| Olvido de contraseña | `sudo -u gastosbyath DATA_DIR=/var/lib/gastosbyath node /opt/gastosbyath/scripts/reset-password.js <usuario>` |
+| Actualizar | `bash /root/gastosbyath/deploy/actualizar.sh` (ver *Actualizar*) |
+| Ajustes | `nano /etc/gastosbyath.env` y `systemctl restart gastosbyath` |
+| Olvido de contraseña | `runuser -u gastosbyath -- env DATA_DIR=/var/lib/gastosbyath node /opt/gastosbyath/scripts/reset-password.js <usuario>` |
+| Parches del sistema | `apt update && apt upgrade -y` |
 
 ## Configuración (variables de entorno)
+
+En el contenedor van en `/etc/gastosbyath.env` (después de cambiarlas, `systemctl restart gastosbyath`; si cambias
+`PORT`, `DATA_DIR` o `APP_DIR`, mejor `bash /root/gastosbyath/deploy/actualizar.sh --forzar`).
 
 | Variable | Por defecto | Para qué |
 |---|---|---|
