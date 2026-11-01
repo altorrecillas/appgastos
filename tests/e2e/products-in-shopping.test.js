@@ -25,22 +25,58 @@ describe('productos en la compra', { skip: SKIP }, () => {
     await srv?.stop();
   });
 
-  test('en la Compra, «Productos» está al lado de las listas y se ve sin desplazar', async () => {
+  // Nada de la barra se sale de la pantalla ni corta el nombre de la lista.
+  const switcherOk = (p) => p.evaluate(() => [...document.querySelectorAll('.shop-switch .ss-half')].every((e) => {
+    const r = e.getBoundingClientRect();
+    const n = e.querySelector('.ss-name');
+    return r.left >= 0 && r.right <= innerWidth && n.scrollHeight <= n.clientHeight + 1;
+  }));
+
+  test('en el móvil, la lista abierta y «Productos» van juntos en una barra que no se corta', async () => {
     const p = a.page;
     await show(p, srv.base, 'compra');
-    const box = await p.locator('.ln-products').boundingBox();
-    assert.ok(box && box.x >= 0 && box.x + box.width <= 390, `dentro de la pantalla: ${JSON.stringify(box)}`);
-    assert.match(await p.textContent('.ln-products'), /Productos\s*\d+ productos/);
-    await p.click('.ln-products');
+    assert.ok(await p.isVisible('.shop-switch'));
+    assert.ok(await switcherOk(p));
+    const listId = await p.evaluate(() => location.hash.match(/compra\/(\d+)/)?.[1] || null);
+    await p.click('.ss-prod');
     await p.waitForSelector('.prod-pane');
     assert.match(await p.evaluate(() => location.hash), /^#\/productos/);
     assert.equal(await p.getAttribute('.tabbar [data-nav=compra]', 'aria-current'), 'page', 'la pestaña Compra sigue marcada');
-    assert.equal(await p.getAttribute('.ln-products', 'aria-current'), 'true');
-    // Y se vuelve a una lista desde la misma barra.
-    const first = await p.getAttribute('.list-nav [data-list] >> nth=0', 'data-list');
-    await p.click('.list-nav [data-list] >> nth=0');
+    assert.equal(await p.getAttribute('.ss-prod', 'aria-current'), 'true');
+    // Y se vuelve a la misma lista desde la barra.
+    await p.click('.ss-list');
     await p.waitForSelector('.list-head');
-    assert.equal(await p.evaluate(() => location.hash), `#/compra/${first}`);
+    if (listId) assert.equal(await p.evaluate(() => location.hash), `#/compra/${listId}`);
+  });
+
+  test('con muchas listas de nombres largos nada se corta, y se cambia de lista desde la hoja', async () => {
+    const p = a.page;
+    for (const name of ['Barbacoa del sábado en casa de los abuelos', 'Farmacia', 'Material escolar de septiembre', 'Ferretería']) {
+      await ana.ok('POST', `${H}/shopping/lists`, { name });
+    }
+    const lists = (await api(p, `${H}/shopping/lists`)).filter((l) => l.status === 'active');
+    for (const w of [360, 390, 430]) {
+      await p.setViewportSize({ width: w, height: 800 });
+      for (const l of lists) {
+        await show(p, srv.base, `compra/${l.id}`);
+        assert.ok(await switcherOk(p), `${w} px, «${l.name}»`);
+      }
+    }
+    await p.setViewportSize({ width: 390, height: 844 });
+    await show(p, srv.base, 'compra');
+    assert.equal((await p.textContent('.ss-chev')).trim(), String(lists.length), 'cuántas listas hay');
+    await p.click('[data-act=pick-list]');
+    await p.waitForSelector('dialog[open] .lpk-row');
+    assert.equal(await p.$$eval('dialog[open] .lpk-row', (x) => x.length), lists.length);
+    const farmacia = lists.find((l) => l.name === 'Farmacia');
+    await p.click(`dialog[open] [data-pick-list="${farmacia.id}"]`);
+    await p.waitForFunction((id) => location.hash === `#/compra/${id}`, farmacia.id);
+    await p.waitForFunction(() => document.querySelector('.ss-name')?.textContent.trim() === 'Farmacia');
+    // Desde la hoja también se crea una lista nueva.
+    await p.click('[data-act=pick-list]');
+    await p.click('dialog[open] [data-act=lp-new]');
+    await p.waitForSelector('dialog[open] #lf-n');
+    await p.keyboard.press('Escape');
   });
 
   test('filtros rápidos: los que están en la lista y los que no tienen precio', async () => {

@@ -12,7 +12,7 @@ import {
 import { enableDragSort, enableSwipe, gestureHint, haptic, swipeRow } from '../gestures.js';
 import { compareLabel, openListPrices, weightOf } from './prices.js';
 import { openProduct, openProductByName } from './products.js';
-import { shopNav } from '../shopnav.js';
+import { lastList, openListPicker, rememberList, shopNav } from '../shopnav.js';
 import { enqueue, isOffline, newId, pending as pendingOps } from '../offline.js';
 
 let SECTIONS = null;
@@ -38,8 +38,9 @@ export default async function shoppingView(ctx) {
   async function load({ quiet = false } = {}) {
     try {
       [lists, summary] = await Promise.all([get('/shopping/lists'), get('/products/summary').catch(() => summary)]);
-      const active = lists.filter((l) => l.status === 'active');
-      if (!listId || !lists.some((l) => l.id === listId)) listId = (active[0] || lists[0])?.id || null;
+      // Sin lista en la dirección, la última que se usó en este dispositivo.
+      if (!listId || !lists.some((l) => l.id === listId)) listId = lastList(lists)?.id || null;
+      rememberList(listId);
       if (listId) {
         [list, sugs] = await Promise.all([get(`/shopping/lists/${listId}`), get(`/shopping/suggestions?list=${listId}`).catch(() => [])]);
         overlayPending();
@@ -82,11 +83,13 @@ export default async function shoppingView(ctx) {
     ctx.el.innerHTML = String(html`<div class="shop-layout ${selecting ? 'selecting' : ''}">
       ${shopNav({ lists, current: listId, summary, done: done.length ? { lists: done, open: showDone } : null })}
       <div>${list ? html`
-        <div class="row list-head" style="margin-bottom:14px;align-items:flex-start">
+        <div class="row list-head" style="margin-bottom:14px">
           <span class="emoji lh-ico">${list.icon}</span>
           <div class="grow" style="min-width:0"><h2 class="lh-name">${list.name}</h2>
-            <div class="small muted">${[list.store, pending.length ? `${pending.length} por comprar` : 'Nada por comprar',
-              list.purchases ? `${plural(list.purchases, 'compra hecha', 'compras hechas')} (${money(list.spent, { decimals: 0 })})` : ''].filter(Boolean).join(' · ')}</div></div>
+            <div class="small muted lh-meta">${[list.store, inCart.length ? `${inCart.length} de ${list.items.length} en el carro` : pending.length ? `${pending.length} por comprar` : 'Nada por comprar',
+              list.purchases ? `${plural(list.purchases, 'compra hecha', 'compras hechas')} (${money(list.spent, { decimals: 0 })})` : ''].filter(Boolean).join(' · ')}</div>
+            ${list.items.length ? html`<div class="lh-bar" role="progressbar" aria-label="Lo que ya está en el carro" aria-valuemin="0" aria-valuemax="${list.items.length}"
+              aria-valuenow="${inCart.length}"><i style="width:${Math.round((inCart.length / list.items.length) * 100)}%"></i></div>` : ''}</div>
           ${can('edit') && list.items.length ? html`<button class="btn sm" data-act="list-prices" aria-label="Precios por supermercado">${icon('tag', 'sm')}<span class="lh-lbl">Precios</span></button>` : ''}
           ${can('edit') ? html`<button class="btn ghost sm icon-only" data-act="list-menu" data-menu-anchor aria-label="Opciones de la lista">${icon('ellipsis-vertical')}</button>` : ''}
         </div>
@@ -247,6 +250,16 @@ export default async function shoppingView(ctx) {
     history.replaceState(null, '', `#/compra/${listId}`);
     load();
   });
+  // Móvil: tocando la lista del interruptor se elige otra (o se crea una nueva).
+  on(ctx.el, 'click', '[data-act=pick-list]', () => openListPicker({
+    lists, current: listId, canEdit: can('edit'),
+    onPick: (id) => {
+      listId = id;
+      history.replaceState(null, '', `#/compra/${listId}`);
+      load();
+    },
+    onNew: () => listForm(),
+  }));
   on(ctx.el, 'click', '[data-act=toggle-done]', () => {
     showDone = !showDone;
     draw();

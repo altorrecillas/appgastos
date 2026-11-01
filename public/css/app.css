@@ -986,6 +986,64 @@ dialog.sheet[open] { display: flex; align-items: center; justify-content: center
 .ln-products { position: relative; }
 .ln-products::before { content: ''; position: absolute; left: 12px; right: 12px; top: -7px; border-top: 1px solid var(--line); }
 .lnp-ico { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none; background: var(--cobalt-soft); color: var(--cobalt); }
+/* Móvil: interruptor de dos mitades (la lista abierta, que abre la hoja con todas, | Productos) */
+.shop-switch {
+  display: none; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; padding: 4px;
+  background: var(--surface-3); border: 1px solid var(--line); border-radius: 20px;
+}
+.ss-half {
+  display: flex; align-items: center; gap: 11px; min-width: 0; padding: 9px 10px 9px 9px; border: 0; border-radius: 16px;
+  background: transparent; color: var(--ink-2); font: inherit; text-align: left; text-decoration: none; cursor: pointer;
+  transition: background 0.18s, box-shadow 0.18s;
+}
+.ss-half:hover { text-decoration: none; }
+.ss-half[aria-current='true'] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-1); }
+.ss-emoji {
+  width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none;
+  font-size: calc(22px * var(--fs)); background: var(--surface);
+}
+.ss-half[aria-current='true'] .ss-emoji { background: var(--surface-3); }
+.ss-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ss-name { font-weight: 660; font-size: calc(15.5px * var(--fs)); line-height: 1.2; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ss-meta { font-size: calc(12.5px * var(--fs)); color: var(--ink-3); line-height: 1.25; }
+.ss-chev {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 1px; min-width: 28px; height: 28px; padding: 0 5px;
+  border-radius: 999px; color: var(--ink-2); background: var(--surface-3);
+}
+.ss-chev b { padding-left: 3px; font-size: calc(12.5px * var(--fs)); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ss-prod { flex-direction: column; justify-content: center; gap: 4px; padding: 8px 14px; text-align: center; }
+.ss-prod .ss-name { font-size: calc(12.5px * var(--fs)); font-weight: 640; }
+.ss-pico { width: 34px; height: 34px; border-radius: 11px; color: var(--cobalt); background: var(--cobalt-soft) !important; }
+.ss-pico .icon { width: 19px; height: 19px; }
+/* Móviles estrechos (360 px): un poco más de sitio para el nombre de la lista */
+@media (max-width: 380px) {
+  .shop-switch { padding: 3px; gap: 3px; }
+  .ss-half { gap: 8px; padding: 8px 7px 8px 7px; }
+  .ss-emoji { width: 34px; height: 34px; border-radius: 10px; font-size: calc(19px * var(--fs)); }
+  .ss-prod { padding: 7px 10px; }
+  .ss-pico { width: 32px; height: 32px; }
+}
+/* Hoja «Tus listas» */
+.lpk { display: flex; flex-direction: column; gap: 14px; }
+.lpk-list { display: flex; flex-direction: column; gap: 6px; }
+.lpk-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-m);
+  background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.lpk-row:hover { background: var(--surface-2); }
+.lpk-row[aria-current='true'] { border-color: color-mix(in srgb, var(--cobalt) 45%, var(--line)); background: color-mix(in srgb, var(--cobalt) 6%, var(--surface)); }
+.lpk-emoji { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none; font-size: calc(22px * var(--fs)); background: var(--surface-3); }
+.lpk-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.lpk-txt b { font-weight: 640; font-size: calc(15.5px * var(--fs)); line-height: 1.25; }
+.lpk-txt small { font-size: calc(13px * var(--fs)); color: var(--ink-3); }
+.lpk-n { flex: none; min-width: 28px; height: 24px; padding: 0 8px; border-radius: 999px; display: grid; place-items: center; background: var(--surface-3); color: var(--ink-2); font-size: calc(12.5px * var(--fs)); font-weight: 680; font-variant-numeric: tabular-nums; }
+.lpk-on { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--cobalt); color: #fff; }
+.lpk-done summary { cursor: pointer; font-size: calc(14px * var(--fs)); color: var(--ink-2); margin-bottom: 8px; }
+/* Progreso del carro bajo el nombre de la lista */
+.list-head { align-items: flex-start; }
+.lh-bar { height: 6px; max-width: 380px; margin-top: 9px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.lh-bar i { display: block; height: 100%; border-radius: inherit; background: var(--pine); transition: width 0.35s var(--ease); }
+@media (prefers-reduced-motion: reduce) { .lh-bar i, .ss-half { transition: none; } }
 .lnp-txt { display: flex; flex-direction: column; min-width: 0; }
 .ln-products .ln-name { font-weight: 620; }
 .ln-products .ln-meta { font-size: calc(12px * var(--fs)); color: var(--ink-3); }
@@ -1256,16 +1314,12 @@ dialog.sheet[open] { display: flex; align-items: center; justify-content: center
   .shop-layout, .settings-layout { grid-template-columns: minmax(0, 1fr); }
   .list-nav { position: static; flex-direction: row; overflow-x: auto; scrollbar-width: none; margin: 0 calc(var(--gutter) * -1); padding: 0 var(--gutter) 4px; }
   .list-nav button, .list-nav > a { flex: none; }
-  .shop-nav { position: static; flex-direction: row; align-items: stretch; gap: 8px; margin: 0 calc(var(--gutter) * -1); padding: 0 var(--gutter); }
-  .shop-nav .list-nav { flex: 1; min-width: 0; margin: 0; padding: 0 0 4px; mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent); }
-  .shop-nav .ln-products {
-    flex: none; flex-direction: column; justify-content: center; gap: 4px; padding: 8px 12px; margin-bottom: 4px; text-align: center;
-    background: var(--surface); border-color: var(--line); box-shadow: var(--shadow-1);
-  }
-  .shop-nav .ln-products::before { display: none; }
-  .shop-nav .ln-products[aria-current='true'] { border-color: var(--cobalt); box-shadow: inset 0 0 0 1px var(--cobalt); }
-  .shop-nav .lnp-txt { align-items: center; }
-  .shop-nav .ln-products .ln-meta { white-space: nowrap; }
+  /* En el móvil, en vez de la columna de listas, el interruptor «lista abierta | Productos». */
+  .shop-nav { position: static; }
+  .shop-nav .list-nav, .shop-nav .ln-products { display: none; }
+  .shop-switch { display: grid; }
+  .list-head { align-items: center; }
+  .list-head .lh-ico, .list-head .lh-name { display: none; }
   .settings-nav { position: static; flex-direction: row; overflow-x: auto; scrollbar-width: none; }
   .settings-nav a { flex: none; }
   .add-item { top: 64px; }

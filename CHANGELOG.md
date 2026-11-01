@@ -3,6 +3,12 @@
 Cada mejora sube la versión (`npm run subir-version -- "Novedad" …`). La app la enseña en *Ajustes → Aplicación*
 y avisa en los móviles cuando hay una nueva.
 
+## 0.46 — 2026-11-01
+
+- Compra en el móvil: la lista abierta y «Productos» van en una barra de dos mitades que nunca se corta, tengas las listas que tengas. Tocando la lista se abre «Tus listas», con todas (lo que falta en cada una, el súper y las terminadas) y el botón «Nueva lista».
+- Al entrar en la Compra se abre la última lista que usaste en ese móvil.
+- Debajo de la lista, una barra de progreso con lo que ya está en el carro («3 de 14 en el carro»).
+
 ## 0.45 — 2026-11-01
 
 - Compra: botón «Productos» al lado de tus listas, también en el móvil. Es el inventario de lo que soléis comprar, con su precio en cada súper, sin salir de la sección.
