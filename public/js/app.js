@@ -300,7 +300,7 @@ function bindShell() {
   on(appEl, 'click', '[data-act=add-income]', () => openTxForm({ kind: 'income' }));
   on(appEl, 'click', '[data-act=houses]', (e, b) => housesMenu(b));
   on(appEl, 'click', '[data-act=me]', (e, b) => meMenu(b));
-  on(appEl, 'click', '[data-act=more]', () => moreSheet());
+  on(appEl, 'click', '.tabbar [data-act=more]', () => moreSheet());
   on(appEl, 'click', '[data-act=palette]', () => palette());
   on(appEl, 'click', '[data-act=alerts]', (e, b) => alertsMenu(b));
   on(appEl, 'click', '[data-act=netinfo]', () => netSheet());
@@ -376,6 +376,7 @@ const MORE_GROUPS = [
 ];
 const EXTRA_NAV = { resumen: ['resumen', 'Resumen del mes', 'sparkles'] };
 const TAB_ROUTES = () => ['inicio', 'movimientos', 'compra', ...(can('edit') ? [] : ['analisis'])];
+const TAB_PARENT = { productos: 'compra' };
 
 function moreSheet() {
   const t = pref('gastosbyath.theme') || 'auto';
@@ -808,14 +809,16 @@ async function route() {
   });
   disposeCharts(viewEl);
   current = { name, cleanups: [], refresh: null, token };
+  // En la barra del móvil, Productos es parte de la Compra (se abre desde ella).
+  const tab = TAB_PARENT[name] && TAB_ROUTES().includes(TAB_PARENT[name]) ? TAB_PARENT[name] : name;
   $$('[data-nav]').forEach((a) => {
-    if (a.dataset.nav === name) a.setAttribute('aria-current', 'page');
+    if (a.dataset.nav === name || (a.dataset.nav === tab && a.closest('.tabbar'))) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
   // En el móvil, «Más» queda marcado cuando la sección abierta está dentro de él.
   const more = $('.tabbar [data-act=more]');
   if (more) {
-    if (TAB_ROUTES().includes(name)) more.removeAttribute('aria-current');
+    if (TAB_ROUTES().includes(tab)) more.removeAttribute('aria-current');
     else more.setAttribute('aria-current', 'page');
   }
   const r = ROUTES[name];

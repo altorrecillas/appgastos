@@ -50,6 +50,15 @@ r.get('/', (req, res) => {
   });
 });
 
+// Para el botón «Productos» de la compra: cuántos hay y cuántos tienen algún precio.
+r.get('/summary', (req, res) => {
+  res.json(one(
+    `SELECT COUNT(*) AS count, COALESCE(SUM(EXISTS (SELECT 1 FROM prices p WHERE p.product_id = c.id)), 0) AS priced
+       FROM shopping_catalog c WHERE c.household_id = ?`,
+    req.hid,
+  ));
+});
+
 r.get('/:id', (req, res) => {
   const id = idParam(req.params.id);
   const c = one(`SELECT ${COLS}, ${IN_LIST} FROM shopping_catalog c WHERE c.id = ? AND c.household_id = ?`, id, req.hid);

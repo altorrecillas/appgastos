@@ -31,7 +31,7 @@ export function buildBackup(req, { scope = 'all', images = true, password = null
   const args = scope === 'shared' ? [] : [me];
   const books = all(
     `SELECT id, parent_id, name, icon, sort, owner_id IS NOT NULL AS private FROM note_books
-      WHERE household_id = ? AND ${visibleWhere(scope)} ORDER BY owner_id IS NOT NULL, sort, lower(name)`,
+      WHERE household_id = ? AND ${visibleWhere(scope)} ORDER BY owner_id IS NOT NULL, sort, norm(name)`,
     hid, ...args,
   );
   const ids = new Set(books.map((b) => b.id));

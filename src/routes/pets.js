@@ -49,7 +49,7 @@ export function petReminders(hid, untilDate) {
       WHERE e.household_id = ? AND p.archived = 0 AND e.next_date IS NOT NULL AND e.next_date <= ?
         AND NOT EXISTS (
           SELECT 1 FROM pet_events e2 WHERE e2.pet_id = e.pet_id AND e2.type = e.type
-             AND lower(e2.title) = lower(e.title) AND (e2.date > e.date OR (e2.date = e.date AND e2.id > e.id)))
+             AND ulower(e2.title) = ulower(e.title) AND (e2.date > e.date OR (e2.date = e.date AND e2.id > e.id)))
       ORDER BY e.next_date`,
     hid, untilDate,
   );

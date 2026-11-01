@@ -1,6 +1,6 @@
 // Movimientos: gastos e ingresos del hogar.
 import express from 'express';
-import { all, insert, one, run, tx, update } from '../db.js';
+import { all, db, insert, normText, one, run, tx, update } from '../db.js';
 import { METHODS, bad, formatEuros, idParam, notFound, v, validate } from '../util.js';
 import { changed } from '../events.js';
 import { ensureRef } from './household.js';
@@ -81,11 +81,14 @@ function buildFilters(q, hid) {
     }
   }
   if (q.method && METHODS.includes(q.method)) add('t.method = ?', q.method);
-  if (q.min) add('t.amount >= ?', Math.round(Number(q.min) * 100) || 0);
-  if (q.max) add('t.amount <= ?', Math.round(Number(q.max) * 100) || 0);
+  // Importes en euros, con punto o con coma decimal («50,5»).
+  const euros = (s) => Math.round(Number(String(s).replace(',', '.')) * 100);
+  if (q.min && Number.isFinite(euros(q.min))) add('t.amount >= ?', euros(q.min));
+  if (q.max && Number.isFinite(euros(q.max))) add('t.amount <= ?', euros(q.max));
   if (q.q) {
-    const like = `%${String(q.q).trim().replace(/[%_]/g, '')}%`;
-    add('(t.description LIKE ? OR t.merchant LIKE ? OR t.notes LIKE ? OR c.name LIKE ?)', like, like, like, like);
+    // Sin distinguir mayúsculas ni acentos, en la descripción, el comercio, las notas o la categoría.
+    const like = `%${normText(String(q.q).trim()).replace(/[%_]/g, '')}%`;
+    add(`norm(t.description || char(1) || t.merchant || char(1) || COALESCE(t.notes, '') || char(1) || COALESCE(c.name, '')) LIKE ?`, like);
   }
   if (q.source === 'recurring') add('t.recurring_id IS NOT NULL');
   if (q.source === 'bills') add('t.bill_id IS NOT NULL');
@@ -96,8 +99,8 @@ function buildFilters(q, hid) {
 const SORTS = {
   date_desc: 't.date DESC, t.id DESC',
   date_asc: 't.date ASC, t.id ASC',
-  amount_desc: 't.amount DESC, t.date DESC',
-  amount_asc: 't.amount ASC, t.date DESC',
+  amount_desc: 't.amount DESC, t.date DESC, t.id DESC',
+  amount_asc: 't.amount ASC, t.date DESC, t.id DESC',
 };
 
 r.get('/', (req, res) => {
@@ -117,17 +120,17 @@ r.get('/', (req, res) => {
 });
 
 r.get('/suggest', (req, res) => {
-  const q = String(req.query.q || '').trim().replace(/[%_]/g, '');
+  const q = normText(String(req.query.q || '').trim()).replace(/[%_]/g, '');
   if (q.length < 2) return res.json([]);
   const like = `%${q}%`;
   const rows = all(
     `SELECT merchant, description, category_id, kind, amount, date, method FROM transactions
-      WHERE household_id = ? AND (merchant LIKE ? OR description LIKE ?) ORDER BY date DESC, id DESC LIMIT 300`,
+      WHERE household_id = ? AND (norm(merchant) LIKE ? OR norm(description) LIKE ?) ORDER BY date DESC, id DESC LIMIT 300`,
     req.hid, like, like,
   );
   const map = new Map();
   for (const row of rows) {
-    const key = `${row.merchant.toLowerCase()}|${row.description.toLowerCase()}`;
+    const key = `${normText(row.merchant)}|${normText(row.description)}`;
     const e = map.get(key);
     if (e) e.count++;
     else map.set(key, { ...row, count: 1 });
@@ -201,23 +204,37 @@ r.post('/bulk', (req, res) => {
 
 r.get('/export.csv', (req, res) => {
   const { where, params } = buildFilters(req.query, req.hid);
-  const rows = all(`${TX_SELECT} WHERE ${where} ORDER BY t.date DESC, t.id DESC`, ...params);
+  // Solo las columnas del archivo y como listas (no objetos), y se envía a trozos: con decenas de miles de movimientos
+  // es varias veces más rápido y no hace falta tener todo el archivo en memoria.
+  const rows = db.prepare(
+    `SELECT t.date, t.kind, t.amount, c.name, t.description, t.merchant, p.name, pt.name, t.method, t.notes
+       FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN people p ON p.id = t.person_id
+       LEFT JOIN pets pt ON pt.id = t.pet_id
+      WHERE ${where} ORDER BY t.date DESC, t.id DESC`,
+  ).raw();
   const METHOD_NAMES = { card: 'Tarjeta', cash: 'Efectivo', transfer: 'Transferencia', direct_debit: 'Domiciliación', bizum: 'Bizum', other: 'Otro' };
   const esc = (s) => {
     const str = String(s ?? '');
     return /[";\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
   };
+  // Un texto que empieza por =, +, - o @ se abriría como fórmula en una hoja de cálculo: se le antepone un apóstrofo.
+  const text = (s) => esc(/^[=+\-@\t\r]/.test(String(s ?? '')) ? `'${s}` : s);
   const head = ['Fecha', 'Tipo', 'Importe', 'Categoría', 'Descripción', 'Comercio', 'Persona', 'Mascota', 'Forma de pago', 'Notas'];
-  const lines = rows.map((t) => [
-    t.date,
-    t.kind === 'expense' ? 'Gasto' : 'Ingreso',
-    ((t.kind === 'expense' ? -t.amount : t.amount) / 100).toFixed(2).replace('.', ','),
-    t.category_name || '', t.description, t.merchant, t.person_name || '', t.pet_name || '',
-    METHOD_NAMES[t.method] || '', t.notes,
-  ].map(esc).join(';'));
   res.set('Content-Type', 'text/csv; charset=utf-8');
   res.set('Content-Disposition', `attachment; filename="movimientos-${new Date().toISOString().slice(0, 10)}.csv"`);
-  res.send('﻿' + [head.join(';'), ...lines].join('\r\n'));
+  let out = `\uFEFF${head.join(';')}`;
+  let n = 0;
+  for (const [date, kind, amount, category, description, merchant, person, pet, method, notes] of rows.iterate(...params)) {
+    out += `\r\n${[
+      date, kind === 'expense' ? 'Gasto' : 'Ingreso', ((kind === 'expense' ? -amount : amount) / 100).toFixed(2).replace('.', ','),
+      text(category), text(description), text(merchant), text(person), text(pet), METHOD_NAMES[method] || '', text(notes),
+    ].join(';')}`;
+    if (++n % 2000 === 0) {
+      res.write(out);
+      out = '';
+    }
+  }
+  res.end(out);
 });
 
 r.get('/:id', (req, res) => {

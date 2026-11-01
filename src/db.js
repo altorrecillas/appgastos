@@ -28,6 +28,12 @@ db.pragma('foreign_keys = ON');
 db.pragma('busy_timeout = 5000');
 db.pragma('synchronous = NORMAL');
 
+// Comparar textos como lo haría una persona: ulower() ignora mayúsculas (también Á, Ñ…: el lower() de SQLite solo
+// entiende A-Z) y norm() además los acentos, para buscar y agrupar («nandu» encuentra «CAFÉ ÑANDÚ»).
+export const normText = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+db.function('ulower', { deterministic: true }, (s) => (s === null ? null : String(s).toLowerCase()));
+db.function('norm', { deterministic: true }, (s) => (s === null ? null : normText(s)));
+
 const migrations = [
   // v1 — esquema inicial
   `
@@ -588,6 +594,12 @@ const migrations = [
   `
   ALTER TABLE households ADD COLUMN income_check TEXT NOT NULL DEFAULT '{}';
   ALTER TABLE recurring ADD COLUMN amount_month TEXT;
+  `,
+
+  // v11 — índices para lo pagado de cada pago fijo y las compras de cada lista (con decenas de miles de movimientos)
+  `
+  CREATE INDEX idx_tx_recurring ON transactions(recurring_id, date);
+  CREATE INDEX idx_tx_list ON transactions(list_id);
   `,
 ];
 

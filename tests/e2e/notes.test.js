@@ -104,9 +104,20 @@ describe('notas en el navegador', { skip: SKIP }, () => {
     for (const t of [PRIVATE, SHARED]) await p.locator('.nl-item', { hasText: t }).waitFor();
     const list = await api(p, '/api/h/1/notes');
     const byTitle = Object.fromEntries(list.map((n) => [n.title, n.private]));
-    assert.deepEqual([byTitle[PRIVATE], byTitle[SHARED]], [true, false], 'cada nota sigue siendo de quien era');
+    assert.deepEqual([byTitle[PRIVATE], byTitle[SHARED]], [true, false], `cada nota sigue siendo de quien era: ${JSON.stringify(list.map((n) => [n.title, n.private, n.book_id]))}`);
     assert.deepEqual(x.errors, []);
     assert.deepEqual(srv2.errors(), []);
+  });
+
+  test('lo que se escribe en la nota nada más crearla no acaba en el título', async () => {
+    const p = a.page;
+    await show(p, srv.base, 'notas');
+    await p.click('#page-actions [data-act=new-note]');
+    await p.locator('[data-body]').focus();
+    await p.waitForTimeout(200); // pasa el momento en que la app pone el cursor en el título
+    await p.keyboard.type('Comprar pilas');
+    assert.equal(await p.inputValue('[data-title]'), '');
+    assert.equal(await p.inputValue('[data-body]'), 'Comprar pilas');
   });
 
   test('sin errores en las páginas ni en el servidor', () => {

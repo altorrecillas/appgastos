@@ -69,7 +69,9 @@ Cada persona tiene su usuario y contraseña, y los hogares se comparten con quie
   bajado, la subida en cada supermercado y **un año frente a otro** producto a producto. Para que cambiar de tienda
   o una oferta no parezcan inflación, cada producto se compara consigo mismo en el mismo súper y sin ofertas.
   La ficha de cada producto dice también cuánto ha cambiado su precio en un año.
-- **Productos** (en «Más»): todos los productos de la compra ordenados por secciones del súper, con buscador.
+- **Productos** (en la Compra, al lado de tus listas): el inventario de lo que soléis comprar, ordenado por secciones del
+  súper, en lista o en cuadrícula con fotos, con filtros «en la lista» y «sin precio», buscador sin acentos y un «+» para
+  añadirlo a la lista.
   Cada uno tiene su ficha con **foto**, marca o detalle, cómo se vende (por unidad, en paquete o al peso),
   su precio en cada supermercado (el más barato resaltado y cuánto más cuesta en los demás), la evolución
   del precio y un botón para añadirlo a la lista. Renombrar o cambiar de sección se aplica también a las

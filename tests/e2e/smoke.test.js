@@ -89,6 +89,16 @@ describe('humo', { skip: SKIP }, () => {
     await p.waitForSelector('dialog[open]', { state: 'detached' });
   });
 
+  test('«Cargar más» en Movimientos carga más filas y no abre el menú «Más»', async () => {
+    const p = m.page;
+    await show(p, srv.base, 'movimientos?period=all');
+    const before = await p.$$eval('[data-tx]', (x) => x.length);
+    await p.click('[data-act=load-more]');
+    await p.waitForFunction((n) => document.querySelectorAll('[data-tx]').length > n, before);
+    await p.waitForTimeout(300);
+    assert.equal(await p.$('dialog[open]'), null);
+  });
+
   test('escritorio: Notas abre la primera nota y no salen los atajos del móvil', async () => {
     const p = d.page;
     await p.goto(`${srv.base}/#/notas`);

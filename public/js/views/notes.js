@@ -643,7 +643,12 @@ export default async function notesView(ctx) {
       redrawList();
       drawEditor();
     } else drawShell();
-    setTimeout(() => $('[data-title]', ctx.el)?.focus(), 60);
+    // El cursor va al título, salvo que ya se esté escribiendo en otro campo: en un móvil lento llegaría tarde
+    // y lo que se escribe en la nota acabaría en el título.
+    setTimeout(() => {
+      const a = document.activeElement;
+      if (!(a && ctx.el.contains(a) && a.matches('input, textarea, [contenteditable]'))) $('[data-title]', ctx.el)?.focus();
+    }, 60);
   }
   async function closeNote() {
     await save();

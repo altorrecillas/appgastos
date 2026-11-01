@@ -76,15 +76,15 @@ r.post('/import.json', atLeast('admin'), (req, res) => {
     const maps = { cat: new Map(), person: new Map(), pet: new Map(), rec: new Map(), bill: new Map(), list: new Map(), goal: new Map(), tx: new Map() };
     // Categorías y personas: se reutilizan las que ya existen con el mismo nombre.
     for (const c of d.categories || []) {
-      const existing = one('SELECT id FROM categories WHERE household_id = ? AND kind = ? AND lower(name) = lower(?)', hid, c.kind, c.name);
+      const existing = one('SELECT id FROM categories WHERE household_id = ? AND kind = ? AND ulower(name) = ulower(?)', hid, c.kind, c.name);
       maps.cat.set(c.id, existing ? existing.id : insert('categories', { ...clone(c, SYS, {}), household_id: hid }));
     }
     for (const p of d.people || []) {
-      const existing = one('SELECT id FROM people WHERE household_id = ? AND lower(name) = lower(?)', hid, p.name);
+      const existing = one('SELECT id FROM people WHERE household_id = ? AND ulower(name) = ulower(?)', hid, p.name);
       maps.person.set(p.id, existing ? existing.id : insert('people', { ...clone(p, [...SYS, 'user_id', 'photo_id'], {}), household_id: hid }));
     }
     for (const p of d.pets || []) {
-      const existing = one('SELECT id FROM pets WHERE household_id = ? AND lower(name) = lower(?)', hid, p.name);
+      const existing = one('SELECT id FROM pets WHERE household_id = ? AND ulower(name) = ulower(?)', hid, p.name);
       maps.pet.set(p.id, existing ? existing.id : insert('pets', { ...clone(p, [...SYS, 'photo_id'], {}), household_id: hid }));
     }
     const refs = { category_id: maps.cat, person_id: maps.person, pet_id: maps.pet };

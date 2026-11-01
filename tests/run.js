@@ -1,6 +1,7 @@
 // Lanza las pruebas por tandas (unitarias, API y pantalla) y al final resume cómo ha ido cada una.
-// Uso: npm test                       todas
+// Uso: npm test                       unitarias, API y pantalla
 //      npm test -- api e2e            solo esas tandas
+//      npm run test:volumen           con muchos datos (6 años, ~50.000 movimientos; tarda un par de minutos)
 //      npm test -- api --test-name-pattern=privada   (lo que empiece por «-» se le pasa a node --test)
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -12,6 +13,8 @@ const PHASES = {
   api: { name: 'API', args: [] },
   // Cada archivo abre su propio Chromium: de dos en dos para no ahogar la máquina.
   e2e: { name: 'Pantalla (navegador)', args: ['--test-concurrency=2'] },
+  // Solo si se pide: cifras y tiempos con un hogar enorme.
+  volume: { name: 'Volumen (muchos datos)', args: ['--test-concurrency=1'], optional: true },
 };
 
 const args = process.argv.slice(2);
@@ -47,7 +50,7 @@ function run(key) {
 }
 
 const results = [];
-for (const key of wanted.length ? wanted : Object.keys(PHASES)) results.push(await run(key));
+for (const key of wanted.length ? wanted : Object.keys(PHASES).filter((k) => !PHASES[k].optional)) results.push(await run(key));
 
 console.log(paint('1', '\nResumen'));
 const n = (x) => x.toLocaleString('es-ES');

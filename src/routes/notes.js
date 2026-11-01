@@ -94,7 +94,7 @@ r.get('/meta', (req, res) => {
     `SELECT b.id, b.name, b.icon, b.parent_id, b.sort, b.owner_id IS NOT NULL AS private,
         (SELECT COUNT(*) FROM notes n WHERE n.book_id = b.id AND n.deleted_at IS NULL) AS n
        FROM note_books b WHERE b.household_id = ? AND ${MINE.replace(/owner_id/g, 'b.owner_id')}
-      ORDER BY b.owner_id IS NOT NULL, b.sort, lower(b.name)`,
+      ORDER BY b.owner_id IS NOT NULL, b.sort, norm(b.name)`,
     req.hid, me,
   );
   const tags = all(
@@ -243,7 +243,7 @@ r.get('/', (req, res) => {
   const order = {
     updated: 'n.updated_at DESC',
     created: 'n.created_at DESC',
-    title: 'lower(n.title)',
+    title: 'norm(n.title)',
   }[req.query.sort] || 'n.updated_at DESC';
   const todoOrder = view === 'todo' ? 'n.done_at IS NOT NULL, n.due_at IS NULL, n.due_at,' : '';
   const rows = all(

@@ -8,6 +8,7 @@ import { bindPickers, chipPicker, notifyChange, readForm, showFormError } from '
 import { axisLabel, grid, mountChart, tipBox, tipHTML } from '../charts.js';
 import { cropPhoto, pickImage } from '../photo.js';
 import { compareLabel, isPerBase, openPriceForm, priceLabel } from './prices.js';
+import { shopNav } from '../shopnav.js';
 
 // Color de cada sección del súper (tiñe su cabecera y las iniciales de sus productos).
 const SECTION_COLORS = {
@@ -69,18 +70,31 @@ async function addToList(p, anchor) {
   return new Promise((resolve) => openMenu(anchor, lists.map((l) => ({ label: `${l.icon}  ${l.name}`, onClick: () => add(l).then(resolve, (e) => (toastError(e), resolve())) }))));
 }
 
+// Cómo se ven: en lista (más a la vista) o en cuadrícula con fotos. Se recuerda en este dispositivo.
+let viewPref = (() => {
+  try {
+    return localStorage.getItem('gastosbyath.productos.vista') === 'grid' ? 'grid' : 'list';
+  } catch {
+    return 'list';
+  }
+})();
+// Buscar sin distinguir mayúsculas ni acentos.
+const fold = (s) => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
 export default async function productsView(ctx) {
   let data = null;
+  let lists = [];
   let q = '';
   let sec = ctx.query.seccion || '';
+  let quick = ''; // '' (todos), 'inlist' (en la lista) o 'noprice' (sin precio)
 
-  ctx.setHeader('Productos', 'Lo que compráis, ordenado por secciones del súper', html`
+  ctx.setHeader('Productos', 'Lo que soléis comprar, con su precio en cada súper', html`
     <a class="btn ghost desktop-only" href="#/precios">${icon('store')}Comparar precios</a>
     ${can('edit') ? html`<button class="btn primary" data-act="new-product">${icon('plus')}<span class="desktop-only">Añadir producto</span></button>` : ''}`);
 
   async function load() {
     try {
-      data = await get('/products');
+      [data, lists] = await Promise.all([get('/products'), get('/shopping/lists').catch(() => lists)]);
       SECTIONS = data.sections;
       if (ctx.isCurrent()) draw();
     } catch (e) {
@@ -88,28 +102,43 @@ export default async function productsView(ctx) {
     }
   }
 
+  // Cada súper con el mismo color que en la ficha del producto y en «Comparar precios».
+  const storeColor = (st) => `var(--chart-${(Math.max(0, data.stores.findIndex((x) => x.toLowerCase() === st.toLowerCase())) % 8) + 1})`;
   // Lo más útil de un vistazo: dónde es más barato (y en cuántos súper hay precio).
   const priceLine = (p) => (p.best
-    ? html`<span class="pl-best">Desde <b class="best">${compareLabel(p.best, p.base_unit).main}</b> en ${p.best.store}</span>${p.stores > 1 ? html`<i class="sep"></i><span class="pl-n">${p.stores} súper</span>` : ''}`
+    ? html`<span class="pl-best">Desde <b class="best">${compareLabel(p.best, p.base_unit).main}</b> en <i class="sdot" style="background:${storeColor(p.best.store)}"></i>${p.best.store}</span>${p.stores > 1 ? html`<i class="sep"></i><span class="pl-n">${p.stores} súper</span>` : ''}`
     : html`<span class="faint">Sin precios</span>`);
+  // A la derecha: ya está en la lista, o un botón para añadirlo.
+  const action = (p) => (p.in_list
+    ? html`<span class="prod-act in" role="img" aria-label="${p.name}: ya está en la lista" title="Ya está en la lista">${icon('check', 'sm')}</span>`
+    : can('edit') ? html`<button type="button" class="prod-act" data-tolist="${p.id}" aria-label="Añadir ${p.name} a la lista" title="Añadir a la lista">${icon('plus', 'sm')}</button>` : '');
 
   const row = (p) => html`<div class="prod-row" data-prod="${p.id}">
     <button type="button" class="prod-open" data-open="${p.id}">${productThumb(p)}
       <span class="prod-txt"><span class="prod-l1"><b>${p.name}</b>${p.note ? html`<span class="nt">${p.note}</span>` : ''}</span><small>${priceLine(p)}</small></span></button>
-    ${p.in_list ? html`<span class="prod-inlist" title="Está en la lista de la compra" aria-label="En la lista">${icon('check', 'sm')}<span>En la lista</span></span>`
-      : can('edit') ? html`<button type="button" class="btn ghost sm icon-only" data-tolist="${p.id}" aria-label="Añadir ${p.name} a la lista">${icon('list-plus')}</button>` : ''}
+    ${action(p)}
+  </div>`;
+  const card = (p) => html`<div class="prod-card" data-prod="${p.id}">
+    <button type="button" class="pc-open" data-open="${p.id}">${productThumb(p, 'xl')}
+      <span class="pc-name">${p.name}</span>${p.note ? html`<span class="pc-note">${p.note}</span>` : ''}
+      <span class="pc-price">${p.best ? html`<b>${compareLabel(p.best, p.base_unit).main}</b><small><i class="sdot" style="background:${storeColor(p.best.store)}"></i>${p.best.store}</small>`
+        : html`<small class="faint">Sin precios</small>`}</span></button>
+    ${action(p)}
   </div>`;
 
   function draw() {
+    const nav = shopNav({ lists, current: 'productos', summary: { count: data.products.length } });
     if (!data.products.length) {
-      ctx.el.innerHTML = String(html`<div class="empty"><div class="art">🧺</div><h3>Vuestros productos, bien ordenados</h3>
+      ctx.el.innerHTML = String(html`<div class="shop-layout">${nav}<div class="prod-pane"><div class="empty"><div class="art">🧺</div><h3>Vuestros productos, bien ordenados</h3>
         <p>Aquí aparecen solos los productos que añadís a la lista de la compra. También podéis crearlos con su foto, la sección del súper y lo que cuestan en cada supermercado.</p>
-        ${can('edit') ? html`<div class="row"><button class="btn primary" data-act="new-product">${icon('plus')}Añadir un producto</button>
-          <a class="btn" href="#/compra">${icon('shopping-cart')}Ir a la lista de la compra</a></div>` : ''}</div>`);
+        ${can('edit') ? html`<div class="row"><button class="btn primary" data-act="new-product">${icon('plus')}Añadir un producto</button></div>` : ''}</div></div></div>`);
       return;
     }
-    const qn = q.trim().toLowerCase();
-    const all = data.products.filter((p) => !qn || p.name.toLowerCase().includes(qn) || p.note.toLowerCase().includes(qn));
+    const qn = fold(q.trim());
+    const counts = { inlist: data.products.filter((p) => p.in_list).length, noprice: data.products.filter((p) => !p.best).length };
+    if ((quick === 'inlist' && !counts.inlist) || (quick === 'noprice' && !counts.noprice)) quick = '';
+    const all = data.products.filter((p) => (!qn || fold(p.name).includes(qn) || fold(p.note).includes(qn))
+      && (quick === 'inlist' ? p.in_list : quick === 'noprice' ? !p.best : true));
     const shown = all.filter((p) => !sec || (p.section || 'otros') === sec);
     const cmp = {
       times: (a, b) => b.times - a.times || a.name.localeCompare(b.name, 'es'),
@@ -119,29 +148,37 @@ export default async function productsView(ctx) {
     const groups = SECTIONS.map((s) => ({ s, items: shown.filter((p) => (SECTIONS.some((x) => x.id === p.section) ? p.section : 'otros') === s.id).sort(cmp) }))
       .filter((g) => g.items.length);
     const count = (id) => all.filter((p) => (p.section || 'otros') === id).length;
-    const noPrice = data.products.filter((p) => !p.best).length;
-    const photos = data.products.filter((p) => p.photo_id).length;
-    ctx.el.innerHTML = String(html`
-      <div class="prod-stats">
-        <span><b>${data.products.length}</b> productos</span>
-        <span><b>${data.products.length - noPrice}</b> con precio</span>
-        <span><b>${photos}</b> con foto</span>
+    const grid = viewPref === 'grid';
+    ctx.el.innerHTML = String(html`<div class="shop-layout">${nav}<div class="prod-pane">
+      <div class="prod-stats" role="toolbar" aria-label="Qué productos ver">
+        <button type="button" data-quick="" aria-pressed="${!quick}"><b>${data.products.length}</b> productos</button>
+        ${counts.inlist ? html`<button type="button" data-quick="inlist" aria-pressed="${quick === 'inlist'}"><b>${counts.inlist}</b> en la lista</button>` : ''}
+        ${counts.noprice ? html`<button type="button" data-quick="noprice" aria-pressed="${quick === 'noprice'}"><b>${counts.noprice}</b> sin precio</button>` : ''}
       </div>
       <div class="prod-tools">
-        <div class="input-group">${icon('search')}<input class="input" type="search" placeholder="Buscar producto o marca…" value="${q}" data-q aria-label="Buscar producto"></div>
-        <button type="button" class="btn sm" data-act="sort" aria-label="Ordenar: ${SORTS[sortPref]}">${icon('arrow-down-up', 'sm')}<span>${SORTS[sortPref]}</span></button>
+        <div class="input-group">${icon('search')}<input class="input" type="search" placeholder="Buscar producto…" value="${q}" data-q aria-label="Buscar producto"></div>
+        <button type="button" class="btn sm" data-act="sort" aria-label="Ordenar: ${SORTS[sortPref]}">${icon('arrow-down-up', 'sm')}<span class="ps-lbl">${SORTS[sortPref]}</span></button>
+        <div class="segmented prod-view" role="group" aria-label="Cómo verlos">
+          <button type="button" data-view="list" aria-pressed="${!grid}" aria-label="En lista" title="En lista">${icon('list', 'sm')}</button>
+          <button type="button" data-view="grid" aria-pressed="${grid}" aria-label="En cuadrícula, con fotos" title="En cuadrícula, con fotos">${icon('grid-2x2', 'sm')}</button>
+        </div>
       </div>
       <div class="chips scroll prod-secs" role="toolbar" aria-label="Secciones">
         <button type="button" class="chip" data-sec="" aria-pressed="${!sec}">Todo<span class="n">${all.length}</span></button>
-        ${SECTIONS.filter((s) => count(s.id)).map((s) => html`<button type="button" class="chip" data-sec="${s.id}" aria-pressed="${sec === s.id}" style="--sc:${secColor(s.id)}">
-          <span class="emoji">${s.icon}</span>${s.name}<span class="n">${count(s.id)}</span></button>`)}
+        ${SECTIONS.filter((x) => count(x.id)).map((x) => html`<button type="button" class="chip" data-sec="${x.id}" aria-pressed="${sec === x.id}" style="--sc:${secColor(x.id)}">
+          <span class="emoji">${x.icon}</span>${x.name}<span class="n">${count(x.id)}</span></button>`)}
       </div>
-      ${groups.length ? html`<div class="prod-groups">${groups.map((g) => html`<section class="prod-group" style="--sc:${secColor(g.s.id)}">
-          <header class="prod-aisle"><span class="emoji">${g.s.icon}</span><h2>${g.s.name}</h2><span class="n">${g.items.length}</span></header>
-          <div class="prod-list">${g.items.map(row)}</div></section>`)}</div>`
+      ${groups.length ? (grid
+        ? html`<div class="prod-gsecs">${groups.map((g) => html`<section class="prod-gsec" style="--sc:${secColor(g.s.id)}">
+            <header class="prod-aisle"><span class="emoji">${g.s.icon}</span><h2>${g.s.name}</h2><span class="n">${g.items.length}</span></header>
+            <div class="prod-grid">${g.items.map(card)}</div></section>`)}</div>`
+        : html`<div class="prod-groups">${groups.map((g) => html`<section class="prod-group" style="--sc:${secColor(g.s.id)}">
+            <header class="prod-aisle"><span class="emoji">${g.s.icon}</span><h2>${g.s.name}</h2><span class="n">${g.items.length}</span></header>
+            <div class="prod-list">${g.items.map(row)}</div></section>`)}</div>`)
         : html`<div class="empty"><div class="art">🔍</div><h3>No hay ningún producto así</h3>
-          <p>Prueba con otra palabra${sec ? ' o mira en todas las secciones' : ''}.</p>
-          ${can('edit') && q.trim() ? html`<div class="row"><button class="btn primary" data-act="new-product" data-name="${q.trim()}">${icon('plus')}Añadir «${q.trim()}»</button></div>` : ''}</div>`}`);
+          <p>Prueba con otra palabra${sec || quick ? ' o mira en todos' : ''}.</p>
+          ${can('edit') && q.trim() ? html`<div class="row"><button class="btn primary" data-act="new-product" data-name="${q.trim()}">${icon('plus')}Añadir «${q.trim()}»</button></div>` : ''}</div>`}
+    </div></div>`);
   }
 
   on(ctx.el, 'input', '[data-q]', (e, input) => {
@@ -154,6 +191,17 @@ export default async function productsView(ctx) {
   });
   on(ctx.el, 'click', '[data-sec]', (e, b) => {
     sec = b.dataset.sec;
+    draw();
+  });
+  on(ctx.el, 'click', '[data-quick]', (e, b) => {
+    quick = b.dataset.quick;
+    draw();
+  });
+  on(ctx.el, 'click', '[data-view]', (e, b) => {
+    viewPref = b.dataset.view;
+    try {
+      localStorage.setItem('gastosbyath.productos.vista', viewPref);
+    } catch { /* sin almacenamiento: solo esta vez */ }
     draw();
   });
   on(ctx.el, 'click', '[data-act=sort]', (e, b) => openMenu(b, Object.entries(SORTS).map(([k, label]) => ({

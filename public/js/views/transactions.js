@@ -82,10 +82,13 @@ export default async function transactionsView(ctx) {
       if (!more) offset = 0;
       const r = await get(`/transactions?${params({ limit: PAGE, offset })}`);
       if (!ctx.isCurrent()) return;
+      const same = more && r.total === totals.total && r.expense === totals.expense && r.income === totals.income;
       items = more ? [...items, ...r.items] : r.items;
       totals = r;
       offset = items.length;
-      drawResults();
+      // «Cargar más» solo añade las filas nuevas: redibujar miles de filas cada vez se vuelve lento.
+      if (same) appendResults(r.items);
+      else drawResults();
     } catch (e) {
       toastError(e);
     } finally {
@@ -150,26 +153,44 @@ export default async function transactionsView(ctx) {
       ${showDaily ? html`<section class="panel" style="margin-bottom:8px;padding-bottom:12px"><div class="panel-head" style="margin-bottom:4px"><h2>Gasto diario</h2>
         <span class="sub">${monthLabelFull(f.month)}</span></div><div class="chart short mini-m" id="daily" role="img" aria-label="Gasto por día"></div></section>` : ''}`);
 
+    $('[data-list]', ctx.el).innerHTML = String(items.length ? html`${groupsOf(items).map(dayGroup)}${moreButton()}`
+      : html`<div class="empty"><div class="art">🔎</div><h3>No hay movimientos</h3>
+        <p>${f.q || activeChips().length || f.kind ? 'Prueba a quitar filtros o a cambiar el periodo.' : `Nada anotado en ${periodLabel().toLowerCase()}.`}</p>
+        ${can('edit') ? html`<div class="row"><button class="btn primary" data-act="add">${icon('plus')}Anotar gasto</button></div>` : ''}</div>`);
+
+    if (showDaily) drawDaily();
+  }
+
+  // Movimientos agrupados por día (vienen ordenados por fecha), con lo gastado e ingresado ese día.
+  function groupsOf(list) {
     const groups = [];
-    for (const t of items) {
+    for (const t of list) {
       let g = groups.at(-1);
       if (!g || g.date !== t.date) groups.push((g = { date: t.date, items: [], exp: 0, inc: 0 }));
       g.items.push(t);
       if (t.kind === 'expense') g.exp += t.amount;
       else g.inc += t.amount;
     }
-    $('[data-list]', ctx.el).innerHTML = String(items.length ? html`
-      ${groups.map((g) => html`<div class="day-group">
-        <div class="day-head"><span class="d">${g.date === today() ? 'Hoy' : fmtDateLong(g.date)}</span>
-          <span class="t">${g.exp ? `−${money(g.exp)}` : ''}${g.exp && g.inc ? '  ' : ''}${g.inc ? html`<span class="pos">+${money(g.inc)}</span>` : ''}</span></div>
-        <div class="rows">${g.items.map(rowFor)}</div></div>`)}
-      ${items.length < totals.total ? html`<div class="row" style="justify-content:center;margin-top:16px">
-        <button class="btn" data-act="more">Cargar más (${(totals.total - items.length).toLocaleString('es-ES')} restantes)</button></div>` : ''}`
-      : html`<div class="empty"><div class="art">🔎</div><h3>No hay movimientos</h3>
-        <p>${f.q || activeChips().length || f.kind ? 'Prueba a quitar filtros o a cambiar el periodo.' : `Nada anotado en ${periodLabel().toLowerCase()}.`}</p>
-        ${can('edit') ? html`<div class="row"><button class="btn primary" data-act="add">${icon('plus')}Anotar gasto</button></div>` : ''}</div>`);
+    return groups;
+  }
+  const dayHead = (g) => html`<div class="day-head"><span class="d">${g.date === today() ? 'Hoy' : fmtDateLong(g.date)}</span>
+    <span class="t">${g.exp ? `−${money(g.exp)}` : ''}${g.exp && g.inc ? '  ' : ''}${g.inc ? html`<span class="pos">+${money(g.inc)}</span>` : ''}</span></div>`;
+  const dayGroup = (g) => html`<div class="day-group" data-day="${g.date}">${dayHead(g)}<div class="rows">${g.items.map(rowFor)}</div></div>`;
+  const moreButton = () => (items.length < totals.total ? html`<div class="row" data-more style="justify-content:center;margin-top:16px">
+    <button class="btn" data-act="load-more">Cargar más (${(totals.total - items.length).toLocaleString('es-ES')} restantes)</button></div>` : '');
 
-    if (showDaily) drawDaily();
+  // Añade al final las filas recién cargadas. Si la página anterior acabó a mitad de un día, ese día continúa.
+  function appendResults(fresh) {
+    const list = $('[data-list]', ctx.el);
+    $('[data-more]', list)?.remove();
+    const groups = groupsOf(fresh);
+    const last = [...list.querySelectorAll(':scope > .day-group')].at(-1);
+    if (last && groups[0] && last.dataset.day === groups[0].date) {
+      const g = groups.shift();
+      last.querySelector('.rows').insertAdjacentHTML('beforeend', String(html`${g.items.map(rowFor)}`));
+      last.querySelector('.day-head').outerHTML = String(dayHead(groupsOf(items.filter((t) => t.date === g.date))[0]));
+    }
+    list.insertAdjacentHTML('beforeend', String(html`${groups.map(dayGroup)}${moreButton()}`));
   }
 
   // Días transcurridos del periodo (los futuros no cuentan para la media diaria).
@@ -436,7 +457,7 @@ export default async function transactionsView(ctx) {
     const t = items.find((x) => x.id === id);
     if (t) openTxForm({ tx: t });
   });
-  on(ctx.el, 'click', '[data-act=more]', (e, b) => withBusy(b, () => load(true)));
+  on(ctx.el, 'click', '[data-act=load-more]', (e, b) => withBusy(b, () => load(true)));
   const header = document.getElementById('page-actions');
   const offHeader = on(header, 'click', '[data-act]', (e, b) => {
     if (b.dataset.act === 'export') download(hurl(`/transactions/export.csv?${params()}`));

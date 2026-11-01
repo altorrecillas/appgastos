@@ -142,7 +142,7 @@ const spec = {
 // Supermercados con precios, de más a menos usado (este orden fija el color de cada uno).
 export const storeList = (hid) => all(
   `SELECT store, COUNT(*) AS n, COUNT(DISTINCT product_id) AS products, MAX(date) AS last FROM prices WHERE household_id = ?
-    GROUP BY lower(store) ORDER BY products DESC, n DESC, last DESC, store`,
+    GROUP BY ulower(trim(store)) ORDER BY products DESC, n DESC, last DESC, store`,
   hid,
 );
 
@@ -248,8 +248,8 @@ r.get('/basket', (req, res) => {
   const cheapest = ranked[0] || null;
   // Tienda habitual: la que más aparece en los gastos de súper de los últimos 90 días.
   const merchants = all(
-    `SELECT lower(merchant) AS m, COUNT(*) AS n FROM transactions
-      WHERE household_id = ? AND kind = 'expense' AND date >= date('now', 'localtime', '-90 days') AND merchant != '' GROUP BY lower(merchant) ORDER BY n DESC`,
+    `SELECT ulower(trim(merchant)) AS m, COUNT(*) AS n FROM transactions
+      WHERE household_id = ? AND kind = 'expense' AND date >= date('now', 'localtime', '-90 days') AND merchant != '' GROUP BY m ORDER BY n DESC`,
     hid,
   );
   const usual = merchants.map((m) => compare.find((s) => norm(s.store) === m.m)).find(Boolean) || ranked.at(-1) || null;

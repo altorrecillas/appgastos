@@ -1,6 +1,6 @@
 // Cifras para el panel de inicio, el análisis y el calendario de pagos.
 import express from 'express';
-import { all, one, run } from '../db.js';
+import { all, normText, one, run } from '../db.js';
 import { addDays, currentMonth, monthBounds, parseYmd, shiftMonth, today } from '../util.js';
 import { amountFor, decorate as decorateRecurring, incomeQuestions, labelFor, occurrences, processDue } from './recurring.js';
 import { petReminders } from './pets.js';
@@ -426,12 +426,25 @@ r.get('/analytics', (req, res) => {
       WHERE t.household_id = ? AND t.date BETWEEN ? AND ? AND t.kind = 'expense' GROUP BY t.pet_id ORDER BY total DESC`,
     ...P,
   );
-  const merchants = all(
+  // Comercios: «Mercadona», «MERCADONA» y «mercadona» son el mismo (también con acentos); se enseña la forma más usada.
+  const shopMap = new Map();
+  for (const row of all(
     `SELECT COALESCE(NULLIF(t.merchant, ''), NULLIF(t.description, ''), 'Sin nombre') AS name, SUM(t.amount) AS total, COUNT(*) AS n,
             MAX(t.date) AS last
-       ${base} AND t.kind = 'expense' GROUP BY lower(name) ORDER BY total DESC LIMIT 12`,
+       ${base} AND t.kind = 'expense' GROUP BY name`,
     ...P,
-  );
+  )) {
+    const key = normText(row.name).trim();
+    const g = shopMap.get(key);
+    if (!g) shopMap.set(key, { ...row, top: row.n });
+    else {
+      if (row.n > g.top) Object.assign(g, { name: row.name, top: row.n });
+      g.total += row.total;
+      g.n += row.n;
+      if (row.last > g.last) g.last = row.last;
+    }
+  }
+  const merchants = [...shopMap.values()].sort((a, b) => b.total - a.total).slice(0, 12).map(({ top, ...m }) => m);
   const biggest = all(
     `SELECT t.id, t.date, t.amount, t.description, t.merchant, c.name AS category_name, c.icon AS category_icon, c.color AS category_color
        FROM transactions t LEFT JOIN categories c ON c.id = t.category_id

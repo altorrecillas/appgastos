@@ -12,6 +12,7 @@ import {
 import { enableDragSort, enableSwipe, gestureHint, haptic, swipeRow } from '../gestures.js';
 import { compareLabel, openListPrices, weightOf } from './prices.js';
 import { openProduct, openProductByName } from './products.js';
+import { shopNav } from '../shopnav.js';
 import { enqueue, isOffline, newId, pending as pendingOps } from '../offline.js';
 
 let SECTIONS = null;
@@ -26,17 +27,17 @@ export default async function shoppingView(ctx) {
   let showDone = false;
   let prevItems = new Map();
   let selecting = false;
+  let summary = null; // cuántos productos hay, para el botón «Productos»
   const selected = new Set();
 
-  ctx.setHeader('Lista de la compra', '', html`<a class="btn ghost desktop-only" href="#/productos">${icon('package')}Productos</a>
-    <a class="btn ghost desktop-only" href="#/precios">${icon('store')}Comparar precios</a>
+  ctx.setHeader('Lista de la compra', '', html`<a class="btn ghost desktop-only" href="#/precios">${icon('store')}Comparar precios</a>
     ${can('edit') ? html`<button class="btn" data-act="new-list">${icon('plus')}<span class="desktop-only">Nueva lista</span></button>` : ''}`);
   if (!SECTIONS) SECTIONS = await get('/shopping/sections').catch(() => []);
   const secInfo = (id) => SECTIONS.find((s) => s.id === id) || { id: 'otros', name: 'Otros', icon: '📦' };
 
   async function load({ quiet = false } = {}) {
     try {
-      lists = await get('/shopping/lists');
+      [lists, summary] = await Promise.all([get('/shopping/lists'), get('/products/summary').catch(() => summary)]);
       const active = lists.filter((l) => l.status === 'active');
       if (!listId || !lists.some((l) => l.id === listId)) listId = (active[0] || lists[0])?.id || null;
       if (listId) {
@@ -51,7 +52,6 @@ export default async function shoppingView(ctx) {
   }
 
   function draw(highlight = false) {
-    const active = lists.filter((l) => l.status === 'active');
     const done = lists.filter((l) => l.status === 'done');
     const changed = new Set();
     if (highlight && list) {
@@ -64,7 +64,8 @@ export default async function shoppingView(ctx) {
     if (!lists.length) {
       ctx.el.innerHTML = String(html`<div class="empty"><div class="art">🛒</div><h3>Sin listas de la compra</h3>
         <p>Crea una lista y compártela con tu familia: lo que añada o tache cada uno aparece al momento en los demás móviles.</p>
-        ${can('edit') ? html`<div class="row"><button class="btn primary" data-act="new-list">${icon('plus')}Crear lista</button></div>` : ''}</div>`);
+        <div class="row">${can('edit') ? html`<button class="btn primary" data-act="new-list">${icon('plus')}Crear lista</button>` : ''}
+          <a class="btn" href="#/productos">${icon('package')}Ver los productos</a></div></div>`);
       return;
     }
     const pending = list ? list.items.filter((i) => !i.checked) : [];
@@ -79,11 +80,7 @@ export default async function shoppingView(ctx) {
     const cartEstimate = inCart.reduce((s, i) => s + (i.price || 0), 0);
 
     ctx.el.innerHTML = String(html`<div class="shop-layout ${selecting ? 'selecting' : ''}">
-      <nav class="list-nav" aria-label="Listas">
-        ${active.map((l) => listBtn(l))}
-        ${done.length ? html`<button class="desktop-only" data-act="toggle-done" style="font-size:calc(13px * var(--fs));color:var(--ink-3)">${icon(showDone ? 'chevron-up' : 'chevron-down', 'sm')}Terminadas (${done.length})</button>
-          ${showDone ? done.map((l) => listBtn(l)) : ''}` : ''}
-      </nav>
+      ${shopNav({ lists, current: listId, summary, done: done.length ? { lists: done, open: showDone } : null })}
       <div>${list ? html`
         <div class="row list-head" style="margin-bottom:14px;align-items:flex-start">
           <span class="emoji lh-ico">${list.icon}</span>
@@ -124,10 +121,6 @@ export default async function shoppingView(ctx) {
       ` : ''}</div>
     </div>`);
   }
-
-  const listBtn = (l) => html`<button data-list="${l.id}" aria-current="${l.id === listId}">
-    <span class="ln-emoji emoji">${l.icon}</span><span class="grow" style="min-width:0"><span class="ln-name ellipsis" style="display:block">${l.name}</span>
-    <span class="ln-meta">${l.status === 'done' ? 'Terminada' : l.items - l.checked ? `${l.items - l.checked} por comprar` : 'Nada pendiente'}</span></span></button>`;
 
   // Pista de precio: dónde es más barato y cuánto cuesta en la tienda de la lista.
   const hintFor = (it) => {
@@ -249,6 +242,7 @@ export default async function shoppingView(ctx) {
   });
   on(ctx.el, 'click', '[data-edit]', (e, b) => editItem(list.items.find((x) => x.id === Number(b.dataset.edit))));
   on(ctx.el, 'click', '[data-list]', (e, b) => {
+    e.preventDefault();
     listId = Number(b.dataset.list);
     history.replaceState(null, '', `#/compra/${listId}`);
     load();

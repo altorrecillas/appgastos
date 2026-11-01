@@ -57,7 +57,7 @@ r.post('/', atLeast('admin'), (req, res) => {
     if (house.icon) run('UPDATE households SET icon = ? WHERE id = ?', house.icon, req.hid);
     if (house.color) run('UPDATE households SET color = ? WHERE id = ?', house.color, req.hid);
     for (const p of people) {
-      if (one('SELECT 1 FROM people WHERE household_id = ? AND lower(name) = lower(?)', req.hid, p.name)) continue;
+      if (one('SELECT 1 FROM people WHERE household_id = ? AND ulower(name) = ulower(?)', req.hid, p.name)) continue;
       const sort = one('SELECT COALESCE(MAX(sort), -1) + 1 AS n FROM people WHERE household_id = ?', req.hid).n;
       insert('people', { household_id: req.hid, name: p.name, emoji: p.emoji || '🙂', sort });
     }
