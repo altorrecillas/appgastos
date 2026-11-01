@@ -129,6 +129,8 @@ export default async function dashboard(ctx) {
         : html`Gastado en total ese mes.`;
     }
     const budget = d.budgetTotal;
+    // La previsión, salvo la primera semana de un hogar sin meses anteriores (con uno o dos días sale un disparate).
+    const forecast = d.forecast && !d.forecast.rough;
     let budgetBlock = '';
     if (budget) {
       const ratio = spent / budget;
@@ -146,7 +148,7 @@ export default async function dashboard(ctx) {
           ${d.isCurrent ? html`<div class="tick" style="left:${expected * 100}%" title="Donde deberíais ir hoy"></div>` : ''}
         </div>
       </div>`;
-    }
+    } else if (d.budgets.length) budgetBlock = limitsBlock(d, isPast);
     return html`<section class="hero" aria-label="Resumen del mes">
       <div>
         <div class="hero-month">
@@ -158,7 +160,7 @@ export default async function dashboard(ctx) {
         <div class="hero-amount" aria-label="${money(spent)}">${p.symBefore ? p.sym : ''}${p.int}<span class="cents">${p.dec}${p.symBefore ? '' : ` ${p.sym}`}</span></div>
         <p class="hero-sentence">${sentence}</p>
         ${budgetBlock}
-        ${d.forecast ? html`<div class="hero-forecast">${icon('trending-up', 'sm')}<span>Previsión al cerrar el mes: <strong>${money(d.forecast.total, { decimals: 0 })}</strong>${budget && d.forecast.total > budget
+        ${forecast ? html`<div class="hero-forecast">${icon('trending-up', 'sm')}<span>Previsión al cerrar el mes: <strong>${money(d.forecast.total, { decimals: 0 })}</strong>${budget && d.forecast.total > budget
           ? html`<span style="color:#ffb3ba">, ${money(d.forecast.total - budget, { decimals: 0 })} por encima del presupuesto</span>` : ''}</span></div>` : ''}
       </div>
       <div class="hero-chart">
@@ -166,11 +168,38 @@ export default async function dashboard(ctx) {
           <span style="color:#fff"><i></i><span class="lg-long">${monthLabel(month, { year: false })}</span><span class="lg-short">${monthShort(month)}</span></span>
           <span style="color:rgba(255,255,255,.5)"><i></i><span class="lg-long">${monthLabel(shiftMonth(month, -1), { year: false })}</span><span class="lg-short">${monthShort(shiftMonth(month, -1))}</span></span>
           ${budget ? html`<span style="color:var(--saffron)"><i></i>Presupuesto</span>` : ''}
-          ${d.forecast ? html`<span style="color:rgba(255,255,255,.75)"><i style="background:repeating-linear-gradient(90deg,currentColor 0 4px,transparent 4px 7px)"></i>Previsión</span>` : ''}
+          ${forecast ? html`<span style="color:rgba(255,255,255,.75)"><i style="background:repeating-linear-gradient(90deg,currentColor 0 4px,transparent 4px 7px)"></i>Previsión</span>` : ''}
         </div>
         <div class="chart" id="pace" role="img" aria-label="Gasto acumulado día a día"></div>
       </div>
     </section>`;
+  }
+
+  // Sin presupuesto total: los límites de cada categoría, cada uno con lo gastado en ella (y no con todo el mes).
+  // Primero los que van más justos; si hay muchos, los tres primeros.
+  function limitsBlock(d, isPast) {
+    const expected = d.isCurrent ? d.dayNow / d.days : isPast ? 1 : 0;
+    const ranked = d.budgets.slice().sort((a, b) => b.total / b.budget - a.total / a.budget);
+    const over = ranked.filter((b) => b.total > b.budget).length;
+    const daysLeft = d.days - d.dayNow;
+    return html`<div class="hero-budget hero-limits">
+      <div class="hl-head"><span>${ranked.length === 1 ? 'Límite por categoría' : `Límites por categoría${over ? ` · ${over} superado${over > 1 ? 's' : ''}` : ''}`}</span>
+        <a href="#/presupuestos">${ranked.length > 3 ? `Ver los ${ranked.length}` : 'Presupuestos'}</a></div>
+      ${ranked.slice(0, 3).map((b) => {
+        const ratio = b.total / b.budget;
+        const left = b.budget - b.total;
+        return html`<a class="hl-row" href="#/movimientos?cat=${b.id}&month=${month}">
+          <span class="row between"><span class="hl-name">${b.icon} ${b.name}</span>
+            <span><strong>${money(b.total, { decimals: 0 })}</strong> de ${money(b.budget, { decimals: 0 })}</span></span>
+          <span class="meter ${ratio > 1 ? 'over' : ''}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(ratio * 100)}"
+            aria-label="${b.name}: gastado del límite"><span class="fill" style="width:${Math.min(ratio, 1) * 100}%"></span>
+            ${d.isCurrent ? html`<span class="tick" style="left:${expected * 100}%" title="Donde deberíais ir hoy"></span>` : ''}</span>
+          ${ranked.length === 1 ? html`<span class="hl-note">${left >= 0
+            ? html`Quedan <strong>${money(left, { decimals: 0 })}</strong>${d.isCurrent ? ` para ${plural(daysLeft + 1, 'día', 'días')}` : ''}`
+            : html`Superado en <strong>${money(-left, { decimals: 0 })}</strong>`}</span>` : ''}
+        </a>`;
+      })}
+    </div>`;
   }
 
   function stats(d) {
@@ -187,7 +216,7 @@ export default async function dashboard(ctx) {
           : html`<span class="delta">este mes</span>`}</a>
       <div class="stat"><span class="label">${icon('scale', 'sm')}Balance</span>
         <span class="value ${balance >= 0 ? 'pos' : 'neg'}">${money(balance, { sign: true, decimals: 0 })}</span>
-        ${d.forecast ? html`<span class="delta ${d.forecast.balance >= 0 ? 'good' : 'bad'}">Al cierre: ${money(d.forecast.balance, { sign: true, decimals: 0 })} previsto</span>`
+        ${d.forecast && !d.forecast.rough ? html`<span class="delta ${d.forecast.balance >= 0 ? 'good' : 'bad'}">Al cierre: ${money(d.forecast.balance, { sign: true, decimals: 0 })} previsto</span>`
           : html`<span class="delta">${balance < 0 ? 'más gastos que ingresos' : d.totals.income ? `ahorro del ${pct(balance / d.totals.income)}` : 'ingresos − gastos'}</span>`}</div>
       <a class="stat clickable" href="#/fijos" style="color:inherit;text-decoration:none"><span class="label">${icon('repeat', 'sm')}Fijos al mes</span>
         <span class="value">${money(d.fixedMonthly, { decimals: 0 })}</span><span class="delta">recibos, cuotas y suscripciones</span></a>
@@ -450,7 +479,7 @@ export default async function dashboard(ctx) {
     const cur = cum(d.daily, showUntil);
     const prev = cum(d.prevDaily, d.prevDaily.length).slice(0, d.days);
     while (prev.length < d.days) prev.push(prev.at(-1) ?? null);
-    const forecastLine = d.forecast && d.dayNow ? daysArr.map((day) => {
+    const forecastLine = d.forecast && !d.forecast.rough && d.dayNow ? daysArr.map((day) => {
       if (day < d.dayNow) return null;
       const start = cur[d.dayNow - 1] ?? 0;
       return Math.round(start + ((d.forecast.total - start) * (day - d.dayNow)) / Math.max(d.days - d.dayNow, 1));

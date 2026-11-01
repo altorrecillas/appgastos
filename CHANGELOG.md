@@ -3,6 +3,13 @@
 Cada mejora sube la versión (`npm run subir-version -- "Novedad" …`). La app la enseña en *Ajustes → Aplicación*
 y avisa en los móviles cuando hay una nueva.
 
+## 0.49 — 2026-11-01
+
+- Presupuestos por categoría: un límite de Restaurantes (o de lo que sea) ya no se convierte en el presupuesto de todo el mes. En el inicio sale ese límite con lo gastado en esa categoría («Restaurantes: 150 € de 200 €»), en vez de dar el mes por superado por la compra o el alquiler.
+- Si ponéis límites a varias categorías, el inicio enseña los tres que van más justos y cuántos se han pasado. El presupuesto total, para todo el gasto, es solo el que se pone para el hogar (en Presupuestos o en Ajustes).
+- Presupuestos lo explica: lo que lleváis en las categorías con límite y cuánto del gasto no cuenta para ninguno. Las categorías sin límite ya no salen en rojo.
+- La previsión de cierre del mes ya no se dispara los primeros días: se apoya en lo que soléis gastar al día y, en un hogar sin meses anteriores, no sale hasta el día 7 (el día 1 multiplicaba lo gastado ese día por 30).
+
 ## 0.48 — 2026-11-01
 
 - Mascotas en el móvil: la página ya no se sale por el lado. Los datos de la ficha (chip, veterinario, seguro, comida…) y la evolución del peso están ahora en el botón «Ficha y peso», y abajo quedan «Salud y cuidados» y «Gastos».

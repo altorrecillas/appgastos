@@ -136,7 +136,8 @@ export default async function settingsView(ctx) {
             <div class="field"><label for="h-c">Moneda</label><select class="select" id="h-c" name="currency" ${admin ? '' : 'disabled'}>
               ${CURRENCIES.map(([k, l]) => html`<option value="${k}" ${h.currency === k ? 'selected' : ''}>${l}</option>`)}</select></div></div>
           <div class="field" style="max-width:280px"><label for="h-b">Presupuesto mensual total <span class="muted">(opcional)</span></label>
-            <div class="input-group"><input class="input" id="h-b" name="monthly_budget" inputmode="decimal" value="${amountStr(h.monthly_budget)}" placeholder="Suma de categorías" style="padding-left:13px" ${admin ? '' : 'disabled'}><span class="suffix">€</span></div></div>
+            <div class="input-group"><input class="input" id="h-b" name="monthly_budget" inputmode="decimal" value="${amountStr(h.monthly_budget)}" placeholder="Sin límite total" style="padding-left:13px" ${admin ? '' : 'disabled'}><span class="suffix">€</span></div>
+            <span class="hint">Para todo el gasto del mes. Los límites de cada categoría (restaurantes, súper…) van aparte, en Presupuestos.</span></div>
           ${admin ? html`<div class="field"><label>Icono</label>${emojiPicker('icon', h.icon, ['🏠', '🏡', '🏢', '🏖️', '🏔️', '🌳', '🏰', '⛺', '🛖', '🏘️'])}</div>
             <div class="field"><label>Color</label>${colorPicker('color', h.color)}</div>
             <label class="switch"><input type="checkbox" name="tint" ${h.tint ? 'checked' : ''}><span class="track"></span>

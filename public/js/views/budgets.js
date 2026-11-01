@@ -27,9 +27,14 @@ export default async function budgetsView(ctx) {
     const withBudget = cats.filter((c) => c.budget > 0);
     const without = cats.filter((c) => !(c.budget > 0));
     const expected = data.isCurrent ? data.dayNow / data.days : month < thisMonth() ? 1 : 0;
-    const totalBudget = store.house.household.monthly_budget || withBudget.reduce((s, c) => s + c.budget, 0);
+    // El presupuesto total es para todo el gasto del mes; los límites de cada categoría, solo para lo suyo.
+    const totalBudget = store.house.household.monthly_budget || 0;
     const spent = data.totals.expense;
     const ratio = totalBudget ? spent / totalBudget : 0;
+    const limit = withBudget.reduce((s, c) => s + c.budget, 0);
+    const limitSpent = withBudget.reduce((s, c) => s + (spentBy.get(c.id) || 0), 0);
+    const limitRatio = limit ? limitSpent / limit : 0;
+    const overCats = withBudget.filter((c) => (spentBy.get(c.id) || 0) > c.budget).length;
 
     const row = (c) => {
       const s = spentBy.get(c.id) || 0;
@@ -39,7 +44,7 @@ export default async function budgetsView(ctx) {
         <span class="cat-dot" style="--c:${c.color}"><span class="emoji">${c.icon}</span></span>
         <div class="top"><b class="ellipsis">${c.name}</b><span class="r">${money(s)}${c.budget ? html` de ${money(c.budget, { decimals: 0 })}` : ''}</span></div>
         ${editing ? html`<div class="edit"><div class="input-group"><input class="input sm" inputmode="decimal" data-budget="${c.id}" value="${amountStr(c.budget)}" placeholder="Sin límite" aria-label="Límite de ${c.name}"><span class="suffix">€</span></div></div>`
-          : html`<div class="edit small ${left < 0 ? 'neg' : 'muted'}" style="text-align:right">${c.budget ? (left >= 0 ? `Quedan ${money(left, { decimals: 0 })}` : `+${money(-left, { decimals: 0 })} de más`) : `Mes pasado ${money(prevBy.get(c.id) || 0, { decimals: 0 })}`}</div>`}
+          : html`<div class="edit small ${c.budget && left < 0 ? 'neg' : 'muted'}" style="text-align:right">${c.budget ? (left >= 0 ? `Quedan ${money(left, { decimals: 0 })}` : `+${money(-left, { decimals: 0 })} de más`) : `Mes pasado ${money(prevBy.get(c.id) || 0, { decimals: 0 })}`}</div>`}
         <div class="meter ${r > 1 ? 'over' : r > expected + 0.1 && r > 0.8 ? 'warn' : ''}" style="--c:${c.color}">
           <div class="fill" style="width:${c.budget ? Math.min(r, 1) * 100 : 0}%"></div>
           ${c.budget && expected > 0 && expected < 1 ? html`<div class="tick" style="left:${expected * 100}%" title="Dónde deberíais ir hoy"></div>` : ''}</div>
@@ -55,9 +60,11 @@ export default async function budgetsView(ctx) {
           <div><div class="small muted">Gastado en ${monthLabelFull(month).toLowerCase()}</div>
             <div style="font-size:calc(40px * var(--fs));font-weight:720;font-stretch:80%;letter-spacing:-.02em">${money(spent)}</div></div>
           <div style="text-align:right">
-            ${editing && can('admin') ? html`<label class="small muted" for="hb">Presupuesto total del hogar</label>
-              <div class="input-group" style="width:200px"><input class="input" id="hb" inputmode="decimal" value="${amountStr(store.house.household.monthly_budget)}" placeholder="Suma de categorías" style="padding-left:13px"><span class="suffix">€</span></div>`
-              : html`<div class="small muted">Presupuesto</div><div style="font-size:calc(24px * var(--fs));font-weight:700;font-stretch:86%">${totalBudget ? money(totalBudget, { decimals: 0 }) : 'Sin definir'}</div>`}
+            ${editing && can('admin') ? html`<label class="small muted" for="hb">Presupuesto total (todo el gasto)</label>
+              <div class="input-group" style="width:200px"><input class="input" id="hb" inputmode="decimal" value="${amountStr(store.house.household.monthly_budget)}" placeholder="Sin límite total" style="padding-left:13px"><span class="suffix">€</span></div>`
+              : html`<div class="small muted">Presupuesto total</div>${totalBudget
+                ? html`<div style="font-size:calc(24px * var(--fs));font-weight:700;font-stretch:86%">${money(totalBudget, { decimals: 0 })}</div>`
+                : html`<div class="ink-2" style="font-weight:600">Sin límite total</div>`}`}
           </div>
         </div>
         ${totalBudget ? html`<div class="meter thick ${ratio > 1 ? 'over' : ''}" style="margin-top:16px;--c:var(--cobalt)"><div class="fill" style="width:${Math.min(ratio, 1) * 100}%"></div>
@@ -65,7 +72,11 @@ export default async function budgetsView(ctx) {
           <p class="small ink-2" style="margin-top:10px">${ratio > 1 ? html`<span class="neg">Os habéis pasado ${money(spent - totalBudget, { decimals: 0 })}.</span>`
             : data.isCurrent ? html`Habéis gastado el ${pct(ratio)} con el ${pct(expected)} del mes transcurrido. ${ratio <= expected ? 'Vais bien.' : 'Vais algo rápido: frenad un poco.'}`
               : `Se gastó el ${pct(ratio)} del presupuesto.`}
-            ${data.forecast && totalBudget ? html` Previsión al cierre: <b>${money(data.forecast.total, { decimals: 0 })}</b>.` : ''}</p>` : ''}
+            ${data.forecast && !data.forecast.rough && totalBudget ? html` Previsión al cierre: <b>${money(data.forecast.total, { decimals: 0 })}</b>.` : ''}</p>`
+          : withBudget.length ? html`<div class="meter thick ${limitRatio > 1 ? 'over' : ''}" style="margin-top:16px;--c:var(--cobalt)"><div class="fill" style="width:${Math.min(limitRatio, 1) * 100}%"></div>
+          ${expected > 0 && expected < 1 ? html`<div class="tick" style="left:${expected * 100}%"></div>` : ''}</div>
+          <p class="small ink-2" style="margin-top:10px">En ${withBudget.length === 1 ? withBudget[0].name : 'las categorías con límite'} lleváis <b>${money(limitSpent, { decimals: 0 })}</b> de <b>${money(limit, { decimals: 0 })}</b>${overCats ? html`: <span class="neg">${withBudget.length === 1 ? 'os habéis pasado' : `${overCats} ${overCats === 1 ? 'se ha pasado' : 'se han pasado'}`}</span>` : ''}.
+            ${spent - limitSpent > 0 ? html`Los otros <b>${money(spent - limitSpent, { decimals: 0 })}</b> no cuentan para ningún límite${can('admin') ? '; si queréis un máximo para todo el mes, ponedlo en «Editar límites»' : ''}.` : ''}</p>` : ''}
       </section>
       ${withBudget.length || editing ? html`<section class="panel"><div class="panel-head"><h2>Por categoría</h2>
         <span class="sub">La marca negra indica dónde deberíais ir hoy</span></div>

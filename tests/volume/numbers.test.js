@@ -107,8 +107,22 @@ test('Inicio: totales, categorías, presupuestos, gasto por día, 12 meses y pre
       assert.equal(d.prevSameDay, prevTo.expense, 'mes anterior hasta el mismo día');
       assert.equal(d.prevSameDayIncome, prevTo.income);
       const soFar = sum(exp.filter((t) => t.date <= TODAY() && !t.recurring_id && !t.bill_id));
-      const rest = Math.round((soFar / Math.max(dayNow, 1)) * (days - dayNow));
+      // El ritmo de este mes, mezclado hasta el día 15 con lo que se suele gastar al día (3 meses anteriores con gasto).
+      let histSum = 0;
+      let histDays = 0;
+      for (let i = 1; i <= 3; i++) {
+        const mm = shift(m, -i);
+        const v = sum(S.tx.filter(inRange(bounds(mm).start, bounds(mm).end)).filter((t) => t.kind === 'expense' && !t.recurring_id && !t.bill_id));
+        if (v > 0) {
+          histSum += v;
+          histDays += bounds(mm).days;
+        }
+      }
+      const histRate = histDays ? histSum / histDays : 0;
+      const w = histRate ? Math.min(1, dayNow / 15) : 1;
+      const rest = Math.round((w * (soFar / Math.max(dayNow, 1)) + (1 - w) * histRate) * (days - dayNow));
       assert.equal(d.forecast.variableRest, rest, 'previsión: lo del día a día que falta');
+      assert.equal(d.forecast.rough, false, 'con meses anteriores, la previsión se enseña');
       assert.equal(d.forecast.total, k.expense + d.forecast.scheduled + rest, 'previsión: suma');
       assert.equal(d.forecast.expectedIncome, 180000 + 150000, 'previsión: las dos nóminas que faltan por cobrar');
       assert.equal(d.forecast.balance, k.income + d.forecast.expectedIncome - d.forecast.total);

@@ -168,7 +168,28 @@ r.get('/dashboard', (req, res) => {
           AND recurring_id IS NULL AND bill_id IS NULL`,
       hid, start, t,
     ).s;
-    const variableRest = Math.round((variableSoFar / Math.max(dayNow, 1)) * (days - dayNow));
+    // Lo del día a día que falta: al principio de mes, unos pocos días dicen poco (un día con la compra grande daría
+    // una previsión disparatada), así que se mezcla con lo que se suele gastar al día (los 3 meses anteriores con
+    // gasto) y, hasta el día 15, va pesando cada vez más el ritmo de este mes. Sin meses anteriores, solo el de este
+    // mes, y la previsión se marca «rough» la primera semana (la app no la enseña).
+    let histSum = 0;
+    let histDays = 0;
+    for (let i = 1; i <= 3; i++) {
+      const b = monthBounds(shiftMonth(month, -i));
+      const v = one(
+        `SELECT COALESCE(SUM(amount), 0) AS s FROM transactions WHERE household_id = ? AND kind = 'expense' AND date BETWEEN ? AND ?
+            AND recurring_id IS NULL AND bill_id IS NULL`,
+        hid, b.start, b.end,
+      ).s;
+      if (v > 0) {
+        histSum += v;
+        histDays += b.days;
+      }
+    }
+    const histRate = histDays ? histSum / histDays : 0;
+    const weight = histRate ? Math.min(1, dayNow / 15) : 1;
+    const rate = weight * (variableSoFar / Math.max(dayNow, 1)) + (1 - weight) * histRate;
+    const variableRest = Math.round(rate * (days - dayNow));
     // Ingresos que aún deben llegar este mes (nóminas y otros ingresos fijos).
     let expectedIncome = 0;
     for (const rec of recurringAll.filter((x) => x.active && x.kind === 'income')) {
@@ -176,7 +197,7 @@ r.get('/dashboard', (req, res) => {
     }
     const total = totals.expense + scheduled + variableRest;
     forecast = {
-      total, scheduled, variableRest, expectedIncome,
+      total, scheduled, variableRest, expectedIncome, rough: !histRate && dayNow < 7,
       income: totals.income + expectedIncome,
       balance: totals.income + expectedIncome - total,
     };
@@ -189,9 +210,10 @@ r.get('/dashboard', (req, res) => {
     .map(decorateRecurring)
     .reduce((s, x) => s + x.monthly, 0);
 
-  const budgetTotal = req.household.monthly_budget
-    || one(`SELECT SUM(budget) AS s FROM categories WHERE household_id = ? AND kind = 'expense' AND archived = 0`, hid).s
-    || null;
+  // El presupuesto total (para todo el gasto del mes) es solo el que se pone para el hogar. Los límites de cada
+  // categoría («Restaurantes: 200 €») van aparte, en «budgets»: sumarlos y compararlos con todo lo gastado daría un
+  // presupuesto que se pasa siempre.
+  const budgetTotal = req.household.monthly_budget || null;
 
   // Luz ahora (solo si el hogar usa el seguimiento del consumo eléctrico).
   let power = null;
