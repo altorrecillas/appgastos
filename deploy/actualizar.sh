@@ -13,15 +13,14 @@ cd "$SRC_DIR"
 # Este contenedor solo descarga: cualquier «git push» desde aquí falla (los datos nunca van a GitHub).
 git config remote.origin.pushurl no-push
 BEFORE="$(git rev-parse HEAD)"
-# Si se volvió a una versión anterior (git checkout <versión>), se regresa a la rama principal.
-if ! git symbolic-ref -q HEAD >/dev/null; then
-  echo "Estabas en una versión anterior: vuelvo a la última."
-  git checkout -q main
-fi
-if ! git pull --ff-only --quiet; then
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "No se ha podido actualizar: hay cambios hechos a mano en $SRC_DIR (míralos con «git status»)."
   exit 1
 fi
+git fetch --quiet origin
+# Siempre la versión de GitHub tal cual: también si se había vuelto a una anterior (git checkout <versión>)
+# o si el historial de GitHub se ha reescrito.
+git checkout -q -B main origin/main
 AFTER="$(git rev-parse HEAD)"
 
 if [ "$BEFORE" = "$AFTER" ] && [ "${1:-}" != "--forzar" ]; then
@@ -30,6 +29,6 @@ if [ "$BEFORE" = "$AFTER" ] && [ "${1:-}" != "--forzar" ]; then
 fi
 if [ "$BEFORE" != "$AFTER" ]; then
   echo "Novedades:"
-  git log --no-merges --format='  • %s' "$BEFORE..$AFTER"
+  git log --no-merges --format='  • %s' "$BEFORE..$AFTER" | head -20
 fi
 exec bash deploy/install.sh
