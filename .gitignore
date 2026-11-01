@@ -1,0 +1,26 @@
+node_modules/
+*.log
+
+# Datos: nunca al repositorio (cuentas, gastos, notas, fotos, claves)
+data/
+uploads/
+backups/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.tar.gz
+*.zip
+secret.key
+vapid.json
+.env
+.env.*
+
+# Cosas del sistema y del editor
+.dropbox
+.dropbox.cache
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/

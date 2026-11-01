@@ -1,0 +1,15 @@
+services:
+  gastosbyath:
+    build: .
+    container_name: gastosbyath
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      TZ: Europe/Madrid
+      ALLOW_REGISTRATION: "true"
+    volumes:
+      - gastosbyath-data:/data
+
+volumes:
+  gastosbyath-data:
