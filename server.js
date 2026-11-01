@@ -104,9 +104,24 @@ const sendIndex = (_req, res) => {
   res.type('html').send(versioned('index.html', '</head>', `  <meta name="app-version" content="${VERSION}">\n</head>`));
 };
 app.get(['/', '/index.html'], sendIndex);
+// Lo que el service worker guarda al instalarse para abrir la app sin conexión: la página, los estilos, todos los
+// módulos (también los que se cargan al entrar en cada sección), los iconos, la fuente y las librerías del arranque.
+function shellFiles() {
+  const walk = (dir) => fs.readdirSync(path.join(PUBLIC, dir), { withFileTypes: true })
+    .flatMap((d) => (d.isDirectory() ? walk(`${dir}/${d.name}`) : d.name.endsWith('.js') ? [`/${dir}/${d.name}`] : []));
+  // El sprite se pide con su versión (?v=N), la misma que usa ui.js.
+  const sprite = fs.readFileSync(path.join(PUBLIC, 'js', 'ui.js'), 'utf8').match(/\/icons\/sprite\.svg\?v=\d+/)?.[0] || '/icons/sprite.svg';
+  return [
+    '/', '/index.html', '/manifest.webmanifest', '/css/app.css', ...walk('js').sort(),
+    sprite, '/icons/logo.svg', '/icons/favicon-32.png', '/icons/apple-touch-icon.png', '/icons/icon-192.png',
+    '/fonts/bricolage-grotesque-latin-standard-normal.woff2', '/fonts/bricolage-grotesque-latin-ext-standard-normal.woff2',
+    '/vendor/echarts.min.js', '/vendor/marked.esm.js', '/vendor/purify.es.js',
+  ];
+}
 app.get('/sw.js', (_req, res) => {
   res.set({ 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' });
-  res.type('js').send(versioned('sw.js', /const VERSION = '[^']*';/, `const VERSION = 'gastosbyath-${VERSION}';`));
+  res.type('js').send(versioned('sw.js', /const VERSION = '[^']*';/, `const VERSION = 'gastosbyath-${VERSION}';`)
+    .replace(/const SHELL = \[[^\]]*\];/, `const SHELL = ${JSON.stringify(shellFiles())};`));
 });
 
 // Archivos estáticos: los recursos con versión en la URL se cachean mucho tiempo.

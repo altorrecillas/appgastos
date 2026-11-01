@@ -28,6 +28,19 @@ test('el servidor, la página y el service worker llevan la versión de package.
   assert.match(await sw.text(), new RegExp(`const VERSION = 'gastosbyath-${VERSION.replace(/\./g, '\\.')}';`));
 });
 
+test('el service worker guarda todo lo que hace falta para abrir la app sin conexión, y todo existe', async () => {
+  const sw = await (await fetch(`${srv.base}/sw.js`)).text();
+  const shell = JSON.parse(sw.match(/const SHELL = (\[[^\]]*\]);/)[1]);
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? walk(path.join(dir, d.name)) : [path.join(dir, d.name)]));
+  const modules = walk(path.join(APP, 'public', 'js')).filter((f) => f.endsWith('.js')).map((f) => f.slice(path.join(APP, 'public').length).split(path.sep).join('/'));
+  assert.ok(modules.length > 30);
+  for (const m of modules) assert.ok(shell.includes(m), `falta ${m}`);
+  const sprite = fs.readFileSync(path.join(APP, 'public', 'js', 'ui.js'), 'utf8').match(/\/icons\/sprite\.svg\?v=\d+/)[0];
+  assert.ok(shell.includes(sprite), 'el sprite con la versión que usa ui.js');
+  // Si uno solo fallara, el service worker no se instalaría.
+  for (const u of shell) assert.equal((await fetch(srv.base + u)).status, 200, u);
+});
+
 test('las novedades empiezan por la versión actual (al subirla, hay que contar qué cambia)', async () => {
   const log = await (await fetch(`${srv.base}/api/changelog`)).json();
   assert.equal(log.version, VERSION);

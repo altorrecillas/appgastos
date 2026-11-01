@@ -8,7 +8,7 @@ import { can, loadHouse } from '../store.js';
 import {
   bindDateQuick, bindPickers, chipPicker, colorPicker, dateQuick, focusFirst, methodOptions, notifyChange, readForm, showFormError,
 } from '../forms.js';
-import { catAxis, grid, mountChart, tipBox, tipHTML, valAxis, axisLabel } from '../charts.js';
+import { catAxis, grid, mountChart, tipBox, tipHTML, valAxis, axisLabel, disposeCharts } from '../charts.js';
 
 const TITLES = {
   vaccine: { dog: ['Rabia', 'Polivalente', 'Leishmaniosis', 'Tos de las perreras'], cat: ['Trivalente felina', 'Leucemia felina', 'Rabia'], other: ['Rabia'] },
@@ -88,7 +88,9 @@ export default async function petsView(ctx) {
 
 async function petDetail(ctx, id) {
   let pet = null;
-  let tab = ctx.query.tab || 'salud';
+  // La ficha y el peso tienen su propia hoja; los enlaces antiguos a esas pestañas la abren.
+  let tab = ctx.query.tab === 'gastos' ? 'gastos' : 'salud';
+  let openCard = ['ficha', 'peso'].includes(ctx.query.tab) ? ctx.query.tab : null;
   async function load() {
     try {
       pet = await get(`/pets/${id}`);
@@ -97,6 +99,11 @@ async function petDetail(ctx, id) {
         <a class="btn ghost" href="#/mascotas">${icon('chevron-left')}<span class="desktop-only">Mascotas</span></a>
         ${can('edit') ? html`<button class="btn primary" data-act="event">${icon('plus')}<span class="desktop-only">Anotar</span></button>` : ''}`);
       draw();
+      if (openCard) {
+        history.replaceState(null, '', `#/mascotas/${id}`);
+        petCard(pet, openCard);
+        openCard = null;
+      }
     } catch (e) {
       if (e.status === 404) ctx.navigate('#/mascotas', { replace: true });
       else toastError(e);
@@ -104,7 +111,6 @@ async function petDetail(ctx, id) {
   }
   function draw() {
     const p = pet;
-    const weights = p.events.filter((e) => e.weight != null).slice().reverse();
     ctx.el.innerHTML = String(html`
       <div class="pet-hero">${petPhoto(p)}
         <div class="stack" style="gap:10px">
@@ -115,30 +121,27 @@ async function petDetail(ctx, id) {
             ${p.sterilized ? html`<span class="pill plain">Esterilizad${p.sex === 'f' ? 'a' : 'o'}</span>` : ''}
             ${p.chip ? html`<span class="pill plain">Chip ${p.chip}</span>` : ''}
           </div>
-          <div class="row wrap" style="gap:22px;margin-top:4px">
-            <div><div class="small muted">Gastado este año</div><div style="font-size:calc(24px * var(--fs));font-weight:720;font-stretch:84%">${money(p.spent_year)}</div></div>
-            <div><div class="small muted">Desde que la registraste</div><div style="font-size:calc(24px * var(--fs));font-weight:720;font-stretch:84%">${money(p.total_spent)}</div></div>
-          </div>
-          ${can('edit') ? html`<div class="row" style="gap:8px"><button class="btn sm" data-act="edit">${icon('pencil', 'sm')}Editar ficha</button>
-            <button class="btn sm" data-act="weight">${icon('weight', 'sm')}Anotar peso</button></div>` : ''}
+        </div>
+        <div class="pet-money">
+          <div><span class="small muted">Gastado este año</span><b>${money(p.spent_year)}</b></div>
+          <div><span class="small muted">Desde que la registraste</span><b>${money(p.total_spent)}</b></div>
+        </div>
+        <div class="pet-actions">
+          <button class="btn" data-act="card">${icon('file-text', 'sm')}Ficha y peso</button>
+          ${can('edit') ? html`<button class="btn" data-act="edit">${icon('pencil', 'sm')}Editar ficha</button>` : ''}
         </div></div>
       ${p.reminders.length ? html`<div class="chips" style="margin-bottom:18px">${p.reminders.map((r) => {
         const n = daysBetween(today(), r.next_date);
-        return html`<span class="pill ${n < 0 ? 'overdue' : n <= 14 ? 'pending' : 'info'}" style="height:30px;font-size:calc(13px * var(--fs))">${PET_EVENTS[r.type]?.emoji} ${r.title}: ${n < 0 ? `vencida ${relDay(r.next_date).toLowerCase()}` : `${relDay(r.next_date).toLowerCase()} (${fmtDate(r.next_date)})`}</span>`;
+        // «en 4 días (5 nov)», pero «26 nov» a secas: sin repetir la fecha.
+        const when = relDay(r.next_date).toLowerCase();
+        return html`<span class="pill ${n < 0 ? 'overdue' : n <= 14 ? 'pending' : 'info'}" style="height:30px;font-size:calc(13px * var(--fs))">${PET_EVENTS[r.type]?.emoji} ${r.title}: ${n < 0 ? `vencida ${when}` : when === fmtDate(r.next_date) ? when : `${when} (${fmtDate(r.next_date)})`}</span>`;
       })}</div>` : ''}
       <div class="tabs" role="tablist">
-        ${[['salud', 'Salud y cuidados', 'heart-pulse'], ['peso', 'Peso', 'weight'], ['gastos', 'Gastos', 'wallet'], ['ficha', 'Ficha', 'file-text']].map(([k, l, ic]) =>
+        ${[['salud', 'Salud y cuidados', 'heart-pulse'], ['gastos', 'Gastos', 'wallet']].map(([k, l, ic]) =>
           html`<button role="tab" data-tab="${k}" aria-selected="${tab === k}">${icon(ic, 'sm')}${l}</button>`)}
       </div>
-      ${tab === 'salud' ? health(p) : tab === 'peso' ? html`<section class="panel">${weights.length > 1 ? html`<div class="chart" id="wchart" role="img" aria-label="Evolución del peso"></div>`
-        : html`<p class="muted">Anota el peso de vez en cuando para ver su evolución.</p>`}
-        <div class="rows" style="margin-top:10px">${weights.slice().reverse().slice(0, 12).map((w, i, arr) => {
-          const prev = arr[i + 1];
-          const diff = prev ? w.weight - prev.weight : 0;
-          return html`<div class="rowi"><span class="main-txt"><span class="title">${num(w.weight)} kg</span><span class="meta">${fmtDateLong(w.date)}</span></span>
-            ${prev ? html`<span class="small ${diff > 0 ? 'neg' : diff < 0 ? 'pos' : 'muted'}">${diff > 0 ? '+' : ''}${num(diff)} kg</span>` : ''}</div>`;
-        })}</div></section>`
-      : tab === 'gastos' ? html`<section class="panel"><div class="panel-head"><h2>Últimos 12 meses</h2></div>
+      ${tab === 'salud' ? health(p)
+      : html`<section class="panel"><div class="panel-head"><h2>Últimos 12 meses</h2></div>
         <div class="chart short" id="pchart" role="img" aria-label="Gasto mensual"></div></section>
         <section class="panel" style="margin-top:18px"><div class="panel-head"><h2>Movimientos</h2>
           <div class="actions">${can('edit') ? html`<button class="btn sm" data-act="expense">${icon('plus', 'sm')}Anotar gasto</button>` : ''}
@@ -146,29 +149,7 @@ async function petDetail(ctx, id) {
           ${p.expenses.length ? html`<div class="rows">${p.expenses.slice(0, 30).map((t) => html`<div class="rowi">
             <span class="cat-dot sm"><span class="emoji">${t.category_icon || '🐾'}</span></span>
             <span class="main-txt"><span class="title">${t.description || t.merchant}</span><span class="meta">${fmtDateFull(t.date)}${t.merchant ? ` · ${t.merchant}` : ''}</span></span>
-            <span class="amount">${money(t.amount)}</span></div>`)}</div>` : html`<p class="muted small">Aún no hay gastos de ${p.name}. Con «Anotar gasto» apuntas la comida, el veterinario o la peluquería, y queda como gasto de ${p.name}.</p>`}</section>`
-      : html`<section class="panel"><dl class="kv">
-          <dt>Especie</dt><dd>${SPECIES[p.species]?.emoji} ${SPECIES[p.species]?.name}</dd>
-          <dt>Raza</dt><dd>${p.breed || '—'}</dd>
-          <dt>Sexo</dt><dd>${p.sex === 'f' ? 'Hembra' : p.sex === 'm' ? 'Macho' : '—'}${p.sterilized ? ' (esterilizado)' : ''}</dd>
-          <dt>Nacimiento</dt><dd>${p.birth_date ? `${fmtDateFull(p.birth_date)} (${ageText(p.birth_date)})` : '—'}</dd>
-          <dt>Microchip</dt><dd>${p.chip || '—'}</dd>
-          <dt>Veterinario</dt><dd>${p.vet || '—'}${p.vet_phone ? html` · <a href="tel:${p.vet_phone.replace(/\s/g, '')}">${p.vet_phone}</a>` : ''}</dd>
-          <dt>Seguro</dt><dd>${p.insurance || '—'}</dd>
-          <dt>Alimentación</dt><dd>${p.food || '—'}</dd>
-          <dt>Notas</dt><dd style="white-space:pre-wrap">${p.notes || '—'}</dd>
-        </dl></section>`}`);
-    if (tab === 'peso' && weights.length > 1) {
-      mountChart($('#wchart', ctx.el), (t) => ({
-        grid: grid({ top: 14 }),
-        tooltip: { ...tipBox(t), trigger: 'axis', axisPointer: { type: 'line', lineStyle: { color: t.axis } },
-          formatter: (ps) => tipHTML(fmtDateFull(weights[ps[0].dataIndex].date), [{ color: p.color, value: `${num(ps[0].value)} kg`, label: 'peso' }]) },
-        xAxis: catAxis(t, weights.map((w) => fmtDate(w.date)), { boundaryGap: false }),
-        yAxis: { type: 'value', scale: true, splitNumber: 4, splitLine: { lineStyle: { color: t.grid } }, axisLabel: axisLabel(t, { formatter: (v) => `${num(v)} kg` }) },
-        series: [{ type: 'line', data: weights.map((w) => w.weight), smooth: 0.2, symbol: 'circle', symbolSize: 8, showSymbol: weights.length < 20,
-          lineStyle: { width: 2, color: p.color }, itemStyle: { color: p.color, borderColor: t.surface, borderWidth: 2 }, areaStyle: { color: p.color, opacity: 0.08 } }],
-      }));
-    }
+            <span class="amount">${money(t.amount)}</span></div>`)}</div>` : html`<p class="muted small">Aún no hay gastos de ${p.name}. Con «Anotar gasto» apuntas la comida, el veterinario o la peluquería, y queda como gasto de ${p.name}.</p>`}</section>`}`);
     if (tab === 'gastos') {
       const months = Array.from({ length: 12 }, (_, i) => shiftMonth(thisMonth(), i - 11));
       const vals = months.map((m) => p.monthly.find((x) => x.month === m)?.total || 0);
@@ -202,7 +183,7 @@ async function petDetail(ctx, id) {
     draw();
   });
   on(ctx.el, 'click', '[data-act=edit]', () => petForm(pet));
-  on(ctx.el, 'click', '[data-act=weight]', () => eventForm(pet, null, 'weight'));
+  on(ctx.el, 'click', '[data-act=card]', () => petCard(pet));
   on(ctx.el, 'click', '[data-act=expense]', () => eventForm(pet, null, 'food'));
   on(ctx.el, 'click', '[data-act=event]', () => eventForm(pet));
   on(ctx.el, 'click', '[data-ev]', (e, b) => eventForm(pet, pet.events.find((x) => x.id === Number(b.dataset.ev))));
@@ -213,16 +194,90 @@ async function petDetail(ctx, id) {
   await load();
 }
 
+// La ficha y la evolución del peso: se consultan de vez en cuando, así que van en su propia hoja y no en la página.
+function petCard(pet, view = 'ficha') {
+  const p = pet;
+  const weights = p.events.filter((e) => e.weight != null).slice().reverse(); // del más antiguo al último
+  const last = weights.at(-1);
+  const ficha = () => html`<dl class="kv">
+    <dt>Especie</dt><dd>${SPECIES[p.species]?.emoji} ${SPECIES[p.species]?.name}</dd>
+    <dt>Raza</dt><dd>${p.breed || '—'}</dd>
+    <dt>Sexo</dt><dd>${p.sex === 'f' ? 'Hembra' : p.sex === 'm' ? 'Macho' : '—'}${p.sterilized ? ` (esterilizad${p.sex === 'f' ? 'a' : 'o'})` : ''}</dd>
+    <dt>Nacimiento</dt><dd>${p.birth_date ? `${fmtDateFull(p.birth_date)} (${ageText(p.birth_date)})` : '—'}</dd>
+    <dt>Peso</dt><dd>${last ? `${num(last.weight)} kg (${fmtDateFull(last.date)})` : '—'}</dd>
+    <dt>Microchip</dt><dd>${p.chip || '—'}</dd>
+    <dt>Veterinario</dt><dd>${p.vet || '—'}${p.vet_phone ? html` · <a href="tel:${p.vet_phone.replace(/\s/g, '')}">${p.vet_phone}</a>` : ''}</dd>
+    <dt>Seguro</dt><dd>${p.insurance || '—'}</dd>
+    <dt>Alimentación</dt><dd>${p.food || '—'}</dd>
+    <dt>Notas</dt><dd style="white-space:pre-wrap">${p.notes || '—'}</dd>
+  </dl>`;
+  const delta = (d) => (Math.abs(d) < 0.005 ? 'igual' : `${d > 0 ? '+' : '−'}${num(Math.abs(d))} kg`);
+  const peso = () => {
+    if (!last) {
+      return html`<div class="empty"><div class="art">⚖️</div><p>Escribe su peso en «Editar ficha» y aquí verás cómo evoluciona.</p></div>`;
+    }
+    const prev = weights.at(-2);
+    const rows = weights.slice().reverse().slice(0, 24);
+    return html`<div class="pc-weight"><b>${num(last.weight)}<small>kg</small></b>
+        <span class="small muted">${fmtDateLong(last.date)}${prev ? ` · ${delta(last.weight - prev.weight).replace('igual', 'igual que el anterior')}${Math.abs(last.weight - prev.weight) < 0.005 ? '' : ' desde el anterior'}` : ''}</span></div>
+      ${weights.length > 1 ? html`<div class="chart short" id="wchart" role="img" aria-label="Evolución del peso de ${p.name}"></div>` : ''}
+      <div class="rows">${rows.map((w, i) => {
+        const before = rows[i + 1];
+        return html`<div class="rowi"><span class="main-txt"><span class="title">${num(w.weight)} kg</span><span class="meta">${fmtDateLong(w.date)}</span></span>
+          ${before ? html`<span class="small muted">${delta(w.weight - before.weight)}</span>` : ''}
+          ${can('edit') ? html`<button class="btn ghost sm icon-only" data-wev="${w.id}" aria-label="Corregir este peso">${icon('pencil', 'sm')}</button>` : ''}</div>`;
+      })}</div>`;
+  };
+  const s = sheet({
+    title: `Ficha de ${p.name}`,
+    body: html`<div class="segmented block pc-switch" data-card-view>
+        <button data-v="ficha" aria-pressed="${view === 'ficha'}">${icon('file-text', 'sm')}Ficha</button>
+        <button data-v="peso" aria-pressed="${view === 'peso'}">${icon('weight', 'sm')}Peso</button></div>
+      <div data-view></div>`,
+    foot: html`${can('edit') ? html`<button class="btn" data-act="edit">${icon('pencil')}Editar ficha</button>` : ''}<span class="spacer"></span>
+      <button class="btn primary" data-close>Cerrar</button>`,
+    onClose: () => disposeCharts(s.el),
+  });
+  const show = (v) => {
+    view = v;
+    disposeCharts(s.el);
+    for (const b of s.el.querySelectorAll('[data-card-view] button')) b.setAttribute('aria-pressed', String(b.dataset.v === v));
+    $('[data-view]', s.el).innerHTML = String(v === 'peso' ? peso() : ficha());
+    if (v !== 'peso' || weights.length < 2) return;
+    mountChart($('#wchart', s.el), (t) => ({
+      grid: grid({ top: 14 }),
+      tooltip: { ...tipBox(t), trigger: 'axis', axisPointer: { type: 'line', lineStyle: { color: t.axis } },
+        formatter: (ps) => tipHTML(fmtDateFull(weights[ps[0].dataIndex].date), [{ color: p.color, value: `${num(ps[0].value)} kg`, label: 'peso' }]) },
+      xAxis: catAxis(t, weights.map((w) => fmtDate(w.date)), { boundaryGap: false }),
+      yAxis: { type: 'value', scale: true, splitNumber: 4, splitLine: { lineStyle: { color: t.grid } }, axisLabel: axisLabel(t, { formatter: (x) => `${num(x)} kg` }) },
+      series: [{ type: 'line', data: weights.map((w) => w.weight), smooth: 0.2, symbol: 'circle', symbolSize: 8, showSymbol: weights.length < 20,
+        lineStyle: { width: 2, color: p.color }, itemStyle: { color: p.color, borderColor: t.surface, borderWidth: 2 }, areaStyle: { color: p.color, opacity: 0.08 } }],
+    }));
+  };
+  on(s.el, 'click', '[data-card-view] button', (e, b) => show(b.dataset.v));
+  on(s.el, 'click', '[data-act=edit]', () => {
+    s.close();
+    petForm(p, { focusWeight: view === 'peso' });
+  });
+  on(s.el, 'click', '[data-wev]', (e, b) => {
+    s.close();
+    eventForm(p, p.events.find((x) => x.id === Number(b.dataset.wev)));
+  });
+  show(view);
+}
+
 function eventForm(pet, ev = null, presetType = null) {
   if (!can('edit')) return;
   const editing = !!ev;
   const d = { type: presetType || 'vaccine', title: '', date: today(), next_date: '', weight: '', notes: '', cost: null, ...(ev || {}) };
+  const types = Object.entries(PET_EVENTS).filter(([k]) => k !== 'weight').map(([value, x]) => ({ value, label: x.name, emoji: x.emoji }));
   const body = (type) => {
     let sugg = TITLES[type]?.[pet.species] || TITLES[type]?.any || TITLES[type]?.other || [];
     // La comida que pone su ficha («Pienso Advance Medium Adult…»), la primera.
     if (type === 'food' && pet.food) sugg = [pet.food.split(/[,.;(]/)[0].trim().slice(0, 80), ...sugg].filter((x, i, a) => x && a.indexOf(x) === i);
     return html`<form class="form" id="evf" autocomplete="off">
-      <div class="field"><label>¿Qué ha sido?</label>${chipPicker('type', Object.entries(PET_EVENTS).map(([value, x]) => ({ value, label: x.name, emoji: x.emoji })), type, { optional: false })}</div>
+      ${type === 'weight' ? html`<input type="hidden" name="type" value="weight">`
+        : html`<div class="field"><label>¿Qué ha sido?</label>${chipPicker('type', types, type, { optional: false })}</div>`}
       ${type !== 'weight' ? html`<div class="field"><label for="ev-t">Título</label><input class="input" id="ev-t" name="title" value="${d.title}" maxlength="80" list="ev-sug" placeholder="${sugg[0] || 'Descripción'}">
         <datalist id="ev-sug">${sugg.map((x) => html`<option value="${x}">`)}</datalist>
         ${sugg.length ? html`<div class="chips" style="margin-top:4px">${sugg.map((x) => html`<button type="button" class="chip sm" data-title="${x}">${x}</button>`)}</div>` : ''}</div>` : ''}
@@ -241,7 +296,7 @@ function eventForm(pet, ev = null, presetType = null) {
     </form>`;
   };
   const s = sheet({
-    title: editing ? 'Editar' : `Anotar para ${pet.name}`,
+    title: d.type === 'weight' ? `Peso de ${pet.name}` : editing ? 'Editar' : `Anotar para ${pet.name}`,
     body: body(d.type),
     foot: html`${editing ? html`<button class="btn danger icon-only" data-act="del" aria-label="Borrar">${icon('trash-2')}</button>` : ''}<span class="spacer"></span>
       <button class="btn" data-close>Cancelar</button><button class="btn primary" data-act="save">Guardar</button>`,
@@ -298,9 +353,10 @@ function eventForm(pet, ev = null, presetType = null) {
   bind();
 }
 
-export function petForm(pet = null) {
+export function petForm(pet = null, { focusWeight = false } = {}) {
   if (!can('edit')) return;
   const editing = !!pet;
+  const lastWeight = pet?.events?.find((e) => e.weight != null);
   const d = { name: '', species: 'dog', breed: '', sex: '', birth_date: '', color: '#EDA100', chip: '', sterilized: 0, vet: '', vet_phone: '', insurance: '', food: '', notes: '', photo_id: null, ...(pet || {}) };
   let photoId = d.photo_id;
   const s = sheet({
@@ -320,7 +376,9 @@ export function petForm(pet = null) {
         <div class="field"><label for="pt-bd">Fecha de nacimiento</label><input class="input" type="date" id="pt-bd" name="birth_date" value="${d.birth_date || ''}"></div>
         <div class="field"><label>Sexo</label>${chipPicker('sex', [{ value: 'f', label: 'Hembra' }, { value: 'm', label: 'Macho' }], d.sex)}</div>
       </div>
-      ${!editing ? html`<div class="field" style="max-width:220px"><label for="pt-w">Peso actual</label><div class="input-group"><input class="input" id="pt-w" name="weight" inputmode="decimal" style="padding-left:13px"><span class="suffix">kg</span></div></div>` : ''}
+      <div class="field pt-weight"><label for="pt-w">Peso actual</label><div class="input-group"><input class="input" id="pt-w" name="weight" inputmode="decimal" style="padding-left:13px"
+          value="${pet?.weight ? num(pet.weight, 2) : ''}" placeholder="0,0"><span class="suffix">kg</span></div>
+        ${editing ? html`<span class="hint">${lastWeight ? `Anotado el ${fmtDateFull(lastWeight.date)}. ` : ''}Si lo cambias, queda en su evolución con fecha de hoy.</span>` : ''}</div>
       <div class="field"><label>Color en la app</label>${colorPicker('color', d.color)}</div>
       <div class="grid-2">
         <div class="field"><label for="pt-c">Microchip</label><input class="input" id="pt-c" name="chip" value="${d.chip}" maxlength="30" inputmode="numeric"></div>
@@ -340,7 +398,8 @@ export function petForm(pet = null) {
     if (name === 'species' && !photoId) $('[data-act=photo] .emoji', f).textContent = SPECIES[value]?.emoji;
     if (name === 'color') $('[data-act=photo]', f).style.setProperty('--c', value);
   });
-  focusFirst(f);
+  if (focusWeight) focusLater($('#pt-w', f), 80);
+  else focusFirst(f);
   on(f, 'click', '[data-act=photo]', () => $('[data-photo]', f).click());
   $('[data-photo]', f).addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -356,12 +415,16 @@ export function petForm(pet = null) {
   on(s.el, 'click', '[data-act=save]', (e, b) => withBusy(b, async () => {
     const v = readForm(f);
     if (!v.name.trim()) return showFormError(f, 'Escribe el nombre');
-    const payload = { ...v, sex: v.sex || null, birth_date: v.birth_date || null, photo_id: photoId || null, weight: v.weight ? Number(String(v.weight).replace(',', '.')) || undefined : undefined };
+    const weight = v.weight.trim() ? Number(v.weight.trim().replace(',', '.')) : null;
+    if (weight !== null && !(weight > 0 && weight <= 2000)) return showFormError(f, 'El peso no es válido');
+    // Solo si cambia: guardar la ficha sin tocar el peso no añade otro punto a su evolución.
+    const changedWeight = weight !== null && Math.abs(weight - (pet?.weight || 0)) > 1e-9;
+    const payload = { ...v, sex: v.sex || null, birth_date: v.birth_date || null, photo_id: photoId || null, weight: changedWeight ? weight : undefined };
     try {
       const r = editing ? await patch(`/pets/${pet.id}`, payload) : await post('/pets', payload);
       await loadHouse();
       notifyChange('pets');
-      toast(editing ? 'Ficha guardada' : `¡${v.name} ya es de la familia!`);
+      toast(editing ? `Ficha guardada${changedWeight ? `. Peso de hoy: ${num(weight, 2)} kg` : ''}` : `¡${v.name} ya es de la familia!`);
       s.close();
       if (!editing) location.hash = `#/mascotas/${r.id}`;
     } catch (err) {

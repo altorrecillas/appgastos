@@ -15,7 +15,16 @@ export class Client {
       h['Content-Type'] = 'application/json';
     }
     if (this.cookies.size) h.Cookie = [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
-    const res = await fetch(this.base + path, { method, headers: h, body: data, redirect: 'manual' });
+    const send = () => fetch(this.base + path, { method, headers: h, body: data, redirect: 'manual' });
+    let res;
+    try {
+      res = await send();
+    } catch (e) {
+      // Una conexión reutilizada que el servidor cerraba por inactiva justo entonces: el navegador repite la lectura
+      // él solo y fetch no. Se repite igual, y solo si es una lectura.
+      if (method !== 'GET' || e.cause?.code !== 'UND_ERR_SOCKET') throw e;
+      res = await send();
+    }
     for (const c of res.headers.getSetCookie?.() || []) {
       const [kv] = c.split(';');
       const i = kv.indexOf('=');

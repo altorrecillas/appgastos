@@ -12,11 +12,22 @@ let unauthorizedHandler = () => {};
 export const onUnauthorized = (fn) => (unauthorizedHandler = fn);
 
 // Estado de la conexión: sin red, o mostrando datos guardados en el dispositivo (los sirve el service worker).
-export const net = { offline: false, cachedAt: null };
-function setNet(offline, cachedAt = null) {
-  if (net.offline === offline && net.cachedAt === cachedAt) return;
-  Object.assign(net, { offline, cachedAt });
+// «slow»: el servidor tarda en contestar (no es que no haya red); se enseña lo guardado mientras.
+export const net = { offline: false, cachedAt: null, slow: false };
+function setNet(offline, cachedAt = null, slow = false) {
+  if (net.offline === offline && net.cachedAt === cachedAt && net.slow === slow) return;
+  Object.assign(net, { offline, cachedAt, slow });
   window.dispatchEvent(new CustomEvent('gastosbyath:net', { detail: { ...net } }));
+}
+// El servidor vuelve a contestar (lo comprueba la app mientras enseña lo guardado).
+export const markOnline = () => setNet(false);
+const OFFLINE_MSG = 'No hay conexión con el servidor. Comprueba la red o Tailscale.';
+// Sin conexión y sin nada guardado: se avisa para que la sección que lo pedía, si aún no enseña nada, lo explique en
+// grande (app.js); entonces el error se marca «quiet» y no sale además como aviso suelto.
+function unavailable(message) {
+  const err = new ApiError(0, message);
+  window.dispatchEvent(new CustomEvent('gastosbyath:unavailable', { detail: err }));
+  return err;
 }
 
 let currentHid = null;
@@ -34,11 +45,16 @@ export async function api(path, { method = 'GET', body, headers = {}, signal } =
     res = await fetch(`/api${path}`, opts);
   } catch (e) {
     if (e.name === 'AbortError') throw e;
-    setNet(true, net.cachedAt);
-    throw new ApiError(0, 'No hay conexión con el servidor. Comprueba la red o Tailscale.');
+    setNet(true, net.cachedAt, net.slow);
+    throw unavailable(OFFLINE_MSG);
+  }
+  // Sin conexión y sin nada guardado de esto: como un fallo de red.
+  if (res.headers.get('x-offline')) {
+    setNet(true, net.cachedAt, net.slow);
+    throw unavailable((await res.json().catch(() => null))?.error || OFFLINE_MSG);
   }
   const cachedAt = res.headers.get('x-cached-at');
-  if (cachedAt) setNet(true, Number(cachedAt));
+  if (cachedAt) setNet(true, Number(cachedAt), res.headers.get('x-cache-reason') === 'slow');
   else setNet(false);
   const type = res.headers.get('content-type') || '';
   const data = type.includes('json') ? await res.json().catch(() => null) : await res.text();

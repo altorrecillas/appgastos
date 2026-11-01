@@ -3,6 +3,15 @@
 Cada mejora sube la versión (`npm run subir-version -- "Novedad" …`). La app la enseña en *Ajustes → Aplicación*
 y avisa en los móviles cuando hay una nueva.
 
+## 0.48 — 2026-11-01
+
+- Mascotas en el móvil: la página ya no se sale por el lado. Los datos de la ficha (chip, veterinario, seguro, comida…) y la evolución del peso están ahora en el botón «Ficha y peso», y abajo quedan «Salud y cuidados» y «Gastos».
+- El peso se escribe en «Editar ficha»: si lo cambias, queda en su gráfica con la fecha de hoy (si lo corriges el mismo día, no sale dos veces). Un peso mal escrito se arregla con el lápiz de la lista.
+- Los avisos de cada mascota ya no repiten la fecha: «Rabia: 26 nov» en vez de «26 nov (26 nov)».
+- La app se abre siempre, aunque el servidor no conteste o tarde (Tailscale apagado, el contenedor reiniciándose…): en unos segundos enseña lo último que se vio en el móvil, con el aviso «Conexión lenta» o «Sin conexión» arriba. Antes se quedaba en blanco esperando.
+- En cuanto el servidor vuelve a contestar, todo se pone al día solo, sin recargar: se envía lo anotado sin conexión y se cargan los datos nuevos.
+- Una sección que nunca se había abierto en ese móvil lo explica y se carga sola al volver la conexión. Y si el móvil aún no tiene nada guardado, la app espera y se abre sola.
+
 ## 0.47 — 2026-11-01
 
 - Pagos fijos «Cada 4 semanas», como cobra Basic-Fit: son 13 cobros al año, algún mes caen dos, y el gasto al mes se calcula con eso (34,99 € cada 4 semanas son unos 38 € al mes).

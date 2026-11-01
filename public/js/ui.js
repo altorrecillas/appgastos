@@ -373,7 +373,7 @@ export function toast(message, { type = 'ok', action, timeout = 4200, iconName }
   while (toastHost.children.length > 3) toastHost.firstElementChild.remove();
   setTimeout(remove, action ? Math.max(timeout, 6500) : timeout);
 }
-export const toastError = (e) => toast(e?.message || String(e), { type: 'err', timeout: 6000 });
+export const toastError = (e) => (e?.quiet ? null : toast(e?.message || String(e), { type: 'err', timeout: 6000 }));
 
 // ---------- Menú emergente ----------
 let openMenuEl = null;

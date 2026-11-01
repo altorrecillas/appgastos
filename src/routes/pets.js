@@ -98,15 +98,27 @@ r.get('/:id', (req, res) => {
   res.json(pet);
 });
 
+// El peso se escribe en la ficha y queda en su evolución con la fecha de hoy: si ya hay uno de hoy se corrige (no dos
+// puntos el mismo día) y si no ha cambiado no se anota otra vez.
+const weightIn = (body) => validate(body, { weight: eventSpec.weight }, { partial: true }).weight;
+function noteWeight(req, petId, weight) {
+  if (!(weight > 0)) return;
+  const last = one(`SELECT id, date, weight FROM pet_events WHERE pet_id = ? AND weight IS NOT NULL ORDER BY date DESC, id DESC LIMIT 1`, petId);
+  if (last?.weight === weight) return;
+  const todays = one(`SELECT id FROM pet_events WHERE pet_id = ? AND type = 'weight' AND date = ? ORDER BY id DESC LIMIT 1`, petId, today());
+  if (todays) run('UPDATE pet_events SET weight = ? WHERE id = ?', weight, todays.id);
+  else insert('pet_events', { pet_id: petId, household_id: req.hid, type: 'weight', title: 'Peso', date: today(), weight, created_by: req.user.id });
+}
+
 r.post('/', (req, res) => {
   const data = validate(req.body, petSpec);
+  const weight = weightIn(req.body);
   ensureRef('attachments', data.photo_id, req.hid, 'Foto');
-  const id = insert('pets', { ...data, household_id: req.hid });
-  if (req.body.weight) {
-    insert('pet_events', {
-      pet_id: id, household_id: req.hid, type: 'weight', title: 'Peso', date: today(), weight: Number(req.body.weight), created_by: req.user.id,
-    });
-  }
+  const id = tx(() => {
+    const petId = insert('pets', { ...data, household_id: req.hid });
+    noteWeight(req, petId, weight);
+    return petId;
+  })();
   changed(req, 'pets', 'create', id, `${req.user.display_name} ha añadido a ${data.name} a la familia`);
   res.status(201).json(one(`${PET_SELECT} WHERE p.id = ?`, id));
 });
@@ -114,8 +126,13 @@ r.post('/', (req, res) => {
 r.patch('/:id', (req, res) => {
   const id = idParam(req.params.id);
   const data = validate(req.body, petSpec, { partial: true });
+  const weight = weightIn(req.body);
   ensureRef('attachments', data.photo_id, req.hid, 'Foto');
-  if (!update('pets', id, req.hid, data) && Object.keys(data).length) throw notFound('Mascota');
+  if (!one('SELECT 1 FROM pets WHERE id = ? AND household_id = ?', id, req.hid)) throw notFound('Mascota');
+  tx(() => {
+    update('pets', id, req.hid, data);
+    noteWeight(req, id, weight);
+  })();
   changed(req, 'pets', 'update', id);
   res.json(one(`${PET_SELECT} WHERE p.id = ?`, id));
 });

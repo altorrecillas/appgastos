@@ -25,7 +25,8 @@ export async function launch() {
 
 // Abre la app con una cuenta ya creada. Devuelve la página y los errores de la página que vayan saliendo.
 export async function openApp(browser, base, username, { hid = 1, password = PASSWORD, ...opts } = {}) {
-  const ctx = await browser.newContext({ locale: 'es-ES', timezoneId: 'Europe/Madrid', acceptDownloads: true, ...MOBILE, ...opts });
+  // Sin animaciones (como con «Reducir movimiento»): con la máquina cargada, un clic podía caer en una hoja que aún subía.
+  const ctx = await browser.newContext({ locale: 'es-ES', timezoneId: 'Europe/Madrid', acceptDownloads: true, reducedMotion: 'reduce', ...MOBILE, ...opts });
   await ctx.addInitScript((h) => {
     try {
       localStorage.setItem('gastosbyath.hid', String(h));

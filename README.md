@@ -19,9 +19,10 @@ Cada persona tiene su usuario y contraseña, y los hogares se comparten con quie
   retiradas de cajero y los traspasos. Se puede arrastrar el archivo sobre Movimientos.
 - **Categorías que se aprenden**: cada vez que eliges o corriges una categoría se recuerda para ese comercio
   (y hay una lista de comercios españoles ya clasificados). Se ven y se ajustan en *Ajustes → Categorías*.
-- **Sin cobertura**: la app se abre con lo último que se vio y se puede seguir anotando gastos (con su foto) y
-  usando la lista de la compra; se envía solo al volver la conexión, sin duplicar nada. Necesita HTTPS
-  (Tailscale serve) para funcionar sin conexión.
+- **Sin cobertura**: la app se abre siempre al momento (la interfaz va guardada en el móvil) y, si el servidor no
+  contesta en unos segundos, enseña lo último que se vio; se puede seguir anotando gastos (con su foto) y usando la
+  lista de la compra, y en cuanto el servidor vuelve se envía todo solo, sin duplicar nada, y los datos se ponen al
+  día sin recargar. Necesita HTTPS (Tailscale serve) para funcionar sin conexión.
 - **Avisos que se adelantan**: la luz va un 20 % por encima de lo normal, un recibo ha subido de precio, una
   posible suscripción nueva (y pasarla a pagos fijos con un toque), categorías disparadas, presupuestos que se
   van a pasar, gastos poco habituales, semana cargada de recibos y rachas de ahorro. En Inicio, en la campana y

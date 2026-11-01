@@ -1125,8 +1125,18 @@ dialog.sheet[open] { display: flex; align-items: center; justify-content: center
 .pet-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .pet-facts div { display: flex; flex-direction: column; font-size: calc(12px * var(--fs)); color: var(--ink-3); }
 .pet-facts b { font-size: calc(15px * var(--fs)); color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
-.pet-hero { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: center; margin-bottom: 20px; }
-.pet-hero .pet-photo { border-radius: var(--r-xl); aspect-ratio: 1; }
+/* La foto a la izquierda y, a su altura y centrados, los datos y debajo los botones (que en el móvil pasan a una fila entera). */
+.pet-hero {
+  display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: 1fr auto auto auto 1fr;
+  grid-template-areas: 'photo .' 'photo info' 'photo money' 'photo actions' 'photo .'; column-gap: 24px; align-items: center; margin-bottom: 20px;
+}
+.pet-hero > .pet-photo { grid-area: photo; border-radius: var(--r-xl); aspect-ratio: 1; }
+.pet-hero > .stack { grid-area: info; min-width: 0; }
+.pet-money { grid-area: money; display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 14px; }
+.pet-money div { display: flex; flex-direction: column; min-width: 0; }
+.pet-money b { font-size: calc(24px * var(--fs)); font-weight: 720; font-stretch: 84%; font-variant-numeric: tabular-nums; }
+.pet-actions { grid-area: actions; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.pt-weight { max-width: 300px; }
 .pet-hero h2 { font-size: calc(38px * var(--fs)); font-weight: 740; font-stretch: 78%; letter-spacing: -0.03em; }
 .ev-list { display: flex; flex-direction: column; }
 .ev-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: center; }
@@ -1135,6 +1145,10 @@ dialog.sheet[open] { display: flex; align-items: center; justify-content: center
 .kv { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px 16px; font-size: calc(14px * var(--fs)); }
 .kv dt { color: var(--ink-3); }
 .kv dd { margin: 0; font-weight: 540; overflow-wrap: anywhere; }
+.pc-switch { margin-bottom: 18px; }
+.pc-weight { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; margin-bottom: 6px; }
+.pc-weight b { font-size: calc(36px * var(--fs)); font-weight: 740; font-stretch: 80%; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.pc-weight b small { font-size: 0.5em; font-weight: 620; color: var(--ink-3); margin-left: 4px; letter-spacing: 0; }
 
 /* ---------- Metas de ahorro ---------- */
 .goals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; }
@@ -1332,10 +1346,15 @@ dialog.sheet[open] { display: flex; align-items: center; justify-content: center
   .auth-art { padding: 28px 22px 32px; min-height: 0; }
   .auth-claim { font-size: calc(42px * var(--fs)); margin-top: 28px; }
   .auth-points { display: none; }
-  .pet-hero { grid-template-columns: 120px minmax(0, 1fr); gap: 16px; }
+  .pet-hero { grid-template-columns: 120px minmax(0, 1fr); column-gap: 16px; }
   .pet-hero h2 { font-size: calc(30px * var(--fs)); }
 }
 @media (max-width: 640px) {
+  .pet-hero { grid-template-rows: auto auto auto; grid-template-areas: 'photo info' 'money money' 'actions actions'; row-gap: 16px; }
+  .pet-money { margin-top: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .pet-actions { margin-top: 0; flex-wrap: nowrap; }
+  .pt-weight { max-width: none; }
+  .pet-actions .btn { flex: 1 1 0; min-width: 0; }
   body { font-size: calc(15px * var(--fs)); }
   .panel-head h2 + .sub, .section-title h2 + .sub { order: 3; flex-basis: 100%; }
   .tabs .long { display: none; }

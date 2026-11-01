@@ -1,5 +1,5 @@
 // Arranque, estructura de la aplicación, navegación y sincronización en tiempo real.
-import { api, get, net, onUnauthorized } from './api.js';
+import { api, get, markOnline, net, onUnauthorized } from './api.js';
 import { discard, onQueueChange, pending as pendingOps, retry, scheduleFlush, setOwner } from './offline.js';
 import { $, $$, debounce, html, icon, money, on, openMenu, promptDialog, raw, relDay, sheet, toast, toastError, closeMenu, focusLater, confirmDialog, withBusy } from './ui.js';
 import { can, loadHouse, pickHousehold, pref, setSession, store } from './store.js';
@@ -50,8 +50,24 @@ async function checkForUpdate() {
     if (!version || version === APP_VERSION || version === newerSeen) return;
     newerSeen = version;
     navigator.serviceWorker?.getRegistration().then((r) => r?.update()).catch(() => {});
-    toast(`Hay una versión nueva de ${NAME}: la ${version}`, { iconName: 'sparkles', timeout: 20000, action: { label: 'Actualizar', fn: () => location.reload() } });
+    toast(`Hay una versión nueva de ${NAME}: la ${version}`, { iconName: 'sparkles', timeout: 20000, action: { label: 'Actualizar', fn: applyUpdate } });
   } catch { /* sin conexión: se mirará la próxima vez */ }
+}
+// La app se abre con lo que guardó su service worker: antes de recargar se espera a que el nuevo haya guardado la
+// versión nueva (si no, volvería a abrirse la anterior).
+async function applyUpdate() {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    await reg?.update();
+    const sw = reg?.installing || reg?.waiting;
+    if (sw) {
+      await new Promise((resolve) => {
+        sw.addEventListener('statechange', () => sw.state === 'activated' && resolve());
+        setTimeout(resolve, 15000);
+      });
+    }
+  } catch { /* se recarga igual */ }
+  location.reload();
 }
 
 const ROUTES = {
@@ -120,6 +136,10 @@ async function boot() {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
     // En cuanto el service worker controla la página se guarda lo necesario para abrirla sin conexión.
     navigator.serviceWorker.addEventListener('controllerchange', warmOfflineCache);
+    // Ha llegado del servidor algo que se estaba enseñando guardado: se comprueba la conexión y se pone todo al día.
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      if (e.data?.type === 'api-fresh' && net.offline) probeServer();
+    });
   }
   document.addEventListener('visibilitychange', checkForUpdate);
   setInterval(checkForUpdate, 30 * 60e3);
@@ -152,10 +172,21 @@ async function showAuth(notice) {
 }
 
 function showFatal(e) {
+  // Sin conexión y sin nada guardado en este dispositivo (la primera vez, o tras cerrar sesión): se abre sola al volver.
+  const waiting = e.status === 0;
   appEl.innerHTML = String(html`<div class="boot"><div class="empty">
-    <div class="art">📡</div><h3>No se puede conectar con ${NAME}</h3><p>${e.message}</p>
-    <div class="row"><button class="btn primary">Reintentar</button></div></div></div>`);
+    <div class="art">📡</div><h3>${waiting ? 'Esperando a la conexión' : `No se puede conectar con ${NAME}`}</h3>
+    <p>${waiting ? 'No hay conexión con el servidor y este dispositivo aún no tiene nada guardado para abrir la app sin ella. En cuanto el servidor conteste, se abrirá sola.' : e.message}</p>
+    <div class="row"><button class="btn ${waiting ? '' : 'primary'}">${waiting ? icon('refresh-cw') : ''}Reintentar</button></div></div></div>`);
   $('button', appEl).onclick = () => location.reload();
+  if (waiting) {
+    const t = setInterval(async () => {
+      if (await serverAnswers()) {
+        clearInterval(t);
+        location.reload();
+      }
+    }, 5000);
+  }
 }
 
 export async function enterApp(preferredHid) {
@@ -574,7 +605,7 @@ function paintNet() {
   let state = null;
   let label = '';
   if (failed) [state, label] = ['err', `${failed} sin enviar`];
-  else if (net.offline) [state, label] = ['off', ops.length ? `Sin conexión · ${ops.length}` : 'Sin conexión'];
+  else if (net.offline) [state, label] = ['off', `${net.slow ? 'Conexión lenta' : 'Sin conexión'}${ops.length ? ` · ${ops.length}` : ''}`];
   else if (ops.length) [state, label] = ['sync', `Enviando ${ops.length}…`];
   pill.hidden = !state;
   if (!state) return;
@@ -582,12 +613,37 @@ function paintNet() {
   pill.title = net.offline && net.cachedAt ? `Mostrando lo guardado a las ${fmtTime(net.cachedAt)}` : label;
   pill.innerHTML = String(html`${icon(state === 'sync' ? 'refresh-cw' : 'cloud-off', 'sm')}<span>${label}</span>`);
 }
+// ¿Contesta el servidor? (sin pasar por lo guardado y sin esperar más de unos segundos)
+async function serverAnswers() {
+  try {
+    return (await fetch('/api/health', { cache: 'no-store', signal: AbortSignal.timeout?.(5000) })).ok;
+  } catch {
+    return false;
+  }
+}
+async function probeServer() {
+  if (await serverAnswers()) markOnline();
+}
+// Mientras se enseña lo guardado, se pregunta al servidor cada poco: en cuanto contesta, todo se pone al día solo
+// (aunque el móvil no note el cambio de red, como cuando vuelve Tailscale o se arranca el contenedor).
+let probeTimer = null;
+function watchServer() {
+  clearInterval(probeTimer);
+  probeTimer = net.offline ? setInterval(probeServer, 8000) : null;
+}
+window.addEventListener('online', () => net.offline && probeServer());
+document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && net.offline && probeServer());
+
 window.addEventListener('gastosbyath:net', (e) => {
   paintNet();
-  // Vuelve la red: se envía lo pendiente y se recargan los datos (lo que se veía era lo guardado).
+  watchServer();
+  // Vuelve la conexión: se envía lo pendiente y se recargan los datos (lo que se veía era lo guardado), también los
+  // del hogar y el tiempo real.
   if (!e.detail.offline) {
     scheduleFlush(300);
-    refreshCurrent({ entity: 'online' });
+    if (!store.me) return;
+    if (store.house && (!es || es.readyState === 2)) connectEvents();
+    Promise.resolve(store.house && loadHouse()).catch(() => {}).finally(() => refreshCurrent({ entity: 'online' }));
   }
 });
 onQueueChange(() => paintNet());
@@ -602,9 +658,9 @@ function netSheet() {
     const ops = pendingOps(store.hid);
     return html`<div class="stack" style="gap:14px">
       <div class="net-state ${net.offline ? 'off' : 'on'}">${icon(net.offline ? 'cloud-off' : 'wifi')}
-        <div><b>${net.offline ? 'Sin conexión' : 'Conectado'}</b>
+        <div><b>${net.offline ? (net.slow ? 'El servidor tarda en contestar' : 'Sin conexión') : 'Conectado'}</b>
           <span class="small muted">${net.offline
-            ? (net.cachedAt ? `Ves lo que se cargó por última vez a las ${fmtTime(net.cachedAt)}. ` : '') + 'Puedes seguir anotando gastos y usando la lista de la compra: se envía solo al volver la cobertura.'
+            ? (net.cachedAt ? `Ves lo que se cargó por última vez a las ${fmtTime(net.cachedAt)}; en cuanto conteste, se pone al día solo. ` : '') + 'Puedes seguir anotando gastos y usando la lista de la compra: se envía solo al volver la cobertura.'
             : ops.length ? 'Enviando lo que se anotó sin conexión…' : 'Todo está al día.'}</span></div></div>
       ${ops.length ? html`<div class="rows">${ops.map((op) => html`<div class="rowi">
         <span class="cat-dot sm" style="--c:${op.error ? 'var(--granada)' : 'var(--saffron)'}">${icon(op.kind === 'tx' ? (op.file ? 'camera' : 'receipt') : 'shopping-cart', 'sm')}</span>
@@ -848,6 +904,7 @@ async function route() {
     await mod.default(ctx);
   } catch (e) {
     if (token !== current.token) return;
+    if (e.status === 0) return showUnavailable(host);
     console.error(e);
     host.innerHTML = String(html`<div class="empty"><div class="art">🧯</div><h3>No se ha podido cargar esta sección</h3>
       <p>${e.message}</p><div class="row"><button class="btn primary" data-retry>Reintentar</button></div></div>`);
@@ -856,6 +913,24 @@ async function route() {
   if (window.scrollY > 0 && !query.keepScroll) window.scrollTo({ top: 0 });
 }
 window.addEventListener('hashchange', route);
+
+// Sin conexión y sin nada guardado de esta sección (no se había abierto en este dispositivo): se explica y se vuelve
+// a abrir sola en cuanto el servidor conteste.
+function showUnavailable(host) {
+  current.refresh = () => route();
+  host.innerHTML = String(html`<div class="empty"><div class="art">📡</div><h3>Sin conexión con el servidor</h3>
+    <p>Esta sección aún no se había abierto en este dispositivo, así que no hay nada guardado que enseñar. Se cargará sola en cuanto vuelva la conexión.</p>
+    <div class="row"><button class="btn" data-retry>${icon('refresh-cw')}Reintentar</button></div></div>`);
+  $('[data-retry]', host).onclick = () => route();
+}
+// Muchas secciones recogen su propio error de carga: si aún no enseñan nada más que el esqueleto de carga, se cambia
+// por la explicación de arriba (y el error ya no sale además como aviso suelto).
+window.addEventListener('gastosbyath:unavailable', (e) => {
+  const host = viewEl?.querySelector('.view-host');
+  if (!host || host.children.length !== 1 || !host.firstElementChild.matches('.sk-page, .skeleton')) return;
+  e.detail.quiet = true;
+  showUnavailable(host);
+});
 // La cabecera se separa del contenido (línea y sombra suaves) en cuanto la página se desplaza.
 let scrolledTop = false;
 window.addEventListener('scroll', () => {
