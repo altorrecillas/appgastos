@@ -3,6 +3,15 @@
 Cada mejora sube la versión (`npm run subir-version -- "Novedad" …`). La app la enseña en *Ajustes → Aplicación*
 y avisa en los móviles cuando hay una nueva.
 
+## 0.47 — 2026-11-01
+
+- Pagos fijos «Cada 4 semanas», como cobra Basic-Fit: son 13 cobros al año, algún mes caen dos, y el gasto al mes se calcula con eso (34,99 € cada 4 semanas son unos 38 € al mes).
+- Nueva categoría de gasto «Gimnasio y deporte» 🏋️, también en los hogares que ya existían. Los gimnasios habituales (Basic-Fit, VivaGym, Altafit, GO fit…) se ponen solos en ella.
+- Mascotas: se puede anotar la comida 🦴 (pienso, latas, premios) con su gasto y un aviso para volver a comprar. En la pestaña «Gastos» de cada mascota hay un botón «Anotar gasto», y la primera sugerencia es la comida que pone su ficha.
+- Copia de las notas con contraseña: si escribías muy rápido en «Repítela», el texto podía acabar en la primera casilla y la copia no se descargaba. Arreglado.
+- Recordatorios: eliges a qué hora te avisa (atajos de 9:00, 14:00, 18:00 y 21:00, o cualquier otra), también el mismo día. El aviso llega a esa hora en punto: antes salían todos a partir de las 9 y se miraba cada 15 minutos.
+- En el móvil, pellizcar o tocar dos veces ya no amplía la página ni la descuadra. Para ver todo más grande, usa «Tamaño del texto» en Apariencia.
+
 ## 0.46 — 2026-11-01
 
 - Compra en el móvil: la lista abierta y «Productos» van en una barra de dos mitades que nunca se corta, tengas las listas que tengas. Tocando la lista se abre «Tus listas», con todas (lo que falta en cada una, el súper y las terminadas) y el botón «Nueva lista».

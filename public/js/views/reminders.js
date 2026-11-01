@@ -17,6 +17,9 @@ const REPEAT_NAMES = {
   none: 'No se repite', weekly: 'Cada semana', monthly: 'Cada mes', bimonthly: 'Cada 2 meses', quarterly: 'Cada 3 meses', semiannual: 'Cada 6 meses', annual: 'Cada año',
 };
 const BEFORE = [[0, 'El mismo día'], [1, '1 día antes'], [3, '3 días antes'], [7, '1 semana antes'], [14, '2 semanas antes'], [30, '1 mes antes']];
+// Horas habituales para el aviso (también se puede poner cualquier otra).
+const HOURS = ['09:00', '14:00', '18:00', '21:00'];
+const DAY_HOUR = '09:00';
 
 export default async function remindersView(ctx) {
   let data = { active: [], done: [] };
@@ -92,6 +95,7 @@ export default async function remindersView(ctx) {
         ${m.category_icon ? html`<span class="emoji">${m.category_icon}</span>` : icon(m.kind === 'payment' ? 'banknote' : 'calendar-check')}</span>
       <span class="main-txt"><span class="title">${m.title}</span>
         <span class="meta"><span class="${n < 0 ? 'neg' : ''}">${n < 0 ? `Venció ${relDay(m.date).toLowerCase()}` : relDay(m.date)} · ${fmtDateLong(m.date).toLowerCase()}</span>
+          ${m.remind_time ? html`<span class="sep"></span><span>${icon('bell', 'sm')} ${m.remind_time}</span>` : ''}
           ${m.repeat !== 'none' ? html`<span class="sep"></span><span>${icon('repeat', 'sm')} ${REPEAT_NAMES[m.repeat].toLowerCase()}</span>` : ''}
           ${m.person_name ? html`<span class="sep"></span><span>${m.person_emoji} ${m.person_name}</span>` : ''}
           ${m.notes ? html`<span class="sep"></span><span class="ellipsis" style="max-width:240px">${m.notes}</span>` : ''}</span></span>
@@ -110,7 +114,11 @@ export default async function remindersView(ctx) {
   function form(rem = null, preset = {}) {
     if (!can('edit')) return;
     const editing = !!rem;
-    const d = { kind: 'payment', title: '', date: addDays(today(), 7), amount: null, repeat: 'none', remind_days: 3, category_id: null, person_id: null, notes: '', ...preset, ...(rem || {}) };
+    const d = {
+      kind: 'payment', title: '', date: addDays(today(), 7), amount: null, repeat: 'none', remind_days: 3, remind_time: DAY_HOUR, category_id: null, person_id: null, notes: '',
+      ...preset, ...(rem || {}),
+    };
+    if (!d.remind_time) d.remind_time = DAY_HOUR;
     const body = (k) => html`<form class="form" id="remf" autocomplete="off">
       <div class="segmented block" data-rk>
         <button type="button" data-v="payment" aria-pressed="${k === 'payment'}">${icon('banknote', 'sm')}Pago</button>
@@ -122,8 +130,14 @@ export default async function remindersView(ctx) {
       ${k === 'payment' ? amountField('amount', d.amount, { label: 'Importe (opcional)' }) : ''}
       ${dateQuick('date', d.date, { label: '¿Cuándo?' })}
       <div class="chips" data-qd>${[[1, 'Mañana'], [7, 'En una semana'], [30, 'En un mes'], [90, 'En tres meses']].map(([n, l]) => html`<button type="button" class="chip sm" data-qd="${n}">${l}</button>`)}</div>
+      <div class="rem-alert">
+        <div class="field"><label>Avisar</label>${chipPicker('remind_days', BEFORE.map(([value, label]) => ({ value, label })), d.remind_days, { optional: false })}</div>
+        <div class="field"><label for="rm-h">¿A qué hora?</label>
+          <div class="rem-hours">${HOURS.map((h) => html`<button type="button" class="chip" data-hour="${h}" aria-pressed="${d.remind_time === h}">${h}</button>`)}</div>
+          <div class="rem-other"><span>U otra hora</span><input class="input" type="time" id="rm-h" name="remind_time" value="${d.remind_time}" step="300" required></div>
+          <span class="hint">${icon('bell', 'sm')} El aviso llega al móvil a esa hora; si sigue pendiente, también ese día y el siguiente.</span></div>
+      </div>
       <div class="field"><label>Repetir</label>${chipPicker('repeat', Object.entries(REPEAT_NAMES).map(([value, label]) => ({ value, label })), d.repeat, { optional: false })}</div>
-      <div class="field"><label>Avisar</label>${chipPicker('remind_days', BEFORE.map(([value, label]) => ({ value, label })), d.remind_days, { optional: false })}</div>
       ${k === 'payment' ? html`<div class="field"><label>Categoría del pago</label>${catPicker('expense', d.category_id)}</div>` : ''}
       ${people().length ? html`<div class="field"><label>¿De quién es?</label>${chipPicker('person_id', personOptions(), d.person_id, { scroll: true })}</div>` : ''}
       <div class="field"><label for="rm-n">Notas</label><textarea class="textarea" id="rm-n" name="notes" maxlength="1000" placeholder="Dónde, qué llevar, teléfono…">${d.notes}</textarea></div>
@@ -143,10 +157,20 @@ export default async function remindersView(ctx) {
     bindPickers(s.body);
     on(s.body, 'click', '[data-rk] [data-v]', (e, b) => {
       const v = readForm($('#remf', s.el));
-      Object.assign(d, { title: v.title, date: v.date, notes: v.notes, repeat: v.repeat, remind_days: Number(v.remind_days), kind: b.dataset.v });
+      Object.assign(d, { title: v.title, date: v.date, notes: v.notes, repeat: v.repeat, remind_days: Number(v.remind_days), remind_time: v.remind_time || DAY_HOUR, kind: b.dataset.v });
       s.body.innerHTML = String(body(b.dataset.v));
       bind();
     });
+    // La hora: los atajos rellenan el campo y se marca el que coincide con lo escrito.
+    const markHour = () => {
+      const val = $('#rm-h', s.el).value;
+      s.el.querySelectorAll('[data-hour]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.hour === val)));
+    };
+    on(s.body, 'click', '[data-hour]', (e, b) => {
+      $('#rm-h', s.el).value = b.dataset.hour;
+      markHour();
+    });
+    on(s.body, 'input', '#rm-h', markHour);
     on(s.body, 'click', '[data-qd]', (e, b) => {
       if (!b.dataset.qd || b.matches('.chips')) return;
       const input = $('input[name=date]', s.el);
@@ -161,13 +185,14 @@ export default async function remindersView(ctx) {
       if (amount !== null && (Number.isNaN(amount) || amount < 0)) return showFormError(f, 'El importe no es válido');
       const payload = {
         kind: v.kind, title: v.title, date: v.date, amount, repeat: v.repeat || 'none', remind_days: Number(v.remind_days || 0),
-        category_id: intOrNull(v.category_id), person_id: intOrNull(v.person_id), notes: v.notes,
+        remind_time: v.remind_time || DAY_HOUR, category_id: intOrNull(v.category_id), person_id: intOrNull(v.person_id), notes: v.notes,
       };
       try {
         if (editing) await patch(`/reminders/${rem.id}`, payload);
         else await post('/reminders', payload);
         notifyChange('reminders');
-        toast(editing ? 'Recordatorio guardado' : `Te avisaremos ${payload.remind_days ? `${BEFORE.find((x) => x[0] === payload.remind_days)?.[1].toLowerCase()}` : 'ese mismo día'}`);
+        const whenTxt = payload.remind_days ? BEFORE.find((x) => x[0] === payload.remind_days)?.[1].toLowerCase() : 'ese mismo día';
+        toast(editing ? 'Recordatorio guardado' : `Te avisaremos ${whenTxt} a las ${payload.remind_time}`);
         s.close(true);
       } catch (err) {
         showFormError(f, err.message);

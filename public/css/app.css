@@ -136,6 +136,9 @@
 /* ---------- Base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* En el móvil, pellizcar o tocar dos veces no amplía la página (se descuadra): se desplaza, nada más.
+   Para verlo todo más grande está «Tamaño del texto» en Apariencia. El recorte de fotos gestiona sus propios dedos. */
+html { touch-action: pan-x pan-y; }
 body {
   margin: 0;
   font-family: var(--font);
@@ -1888,6 +1891,16 @@ details.ha-log[open] > summary .icon { transform: rotate(180deg); }
   .insight { flex: 0 0 86%; scroll-snap-align: start; }
 }
 @media (prefers-reduced-motion: reduce) { .insight { transition: none; } }
+
+/* ---------- Recordatorios: cuándo y a qué hora avisar ---------- */
+.rem-alert { display: flex; flex-direction: column; gap: 14px; padding: 14px; border-radius: var(--r-l); background: var(--surface-2); border: 1px solid var(--line); }
+.rem-alert .field { margin: 0; }
+.rem-hours { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.rem-hours .chip { justify-content: center; padding: 0 6px; font-variant-numeric: tabular-nums; }
+.rem-other { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: calc(14px * var(--fs)); color: var(--ink-2); }
+.rem-other .input { width: 132px; flex: none; font-variant-numeric: tabular-nums; }
+.rem-alert .hint { display: inline-flex; align-items: flex-start; gap: 6px; }
+.rem-alert .hint .icon { flex: none; margin-top: 2px; }
 
 /* ---------- Nóminas del mes («¿es igual que la anterior?») ---------- */
 .pay-ask {

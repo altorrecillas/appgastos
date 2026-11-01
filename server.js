@@ -31,7 +31,7 @@ import { ensurePrices, powerSettings, syncBaseDays } from './src/power.js';
 import { addDays, today } from './src/util.js';
 import { VERSION, changelog } from './src/version.js';
 import pushRoutes from './src/routes/push.js';
-import { pushDigest } from './src/push.js';
+import { pushDigest, pushReminders } from './src/push.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8080;
@@ -177,6 +177,8 @@ setTimeout(() => haScheduler().catch(() => {}), 15 * 1000).unref();
 setInterval(() => haScheduler().catch((e) => console.error('Error sincronizando Home Assistant', e)), 60 * 1000).unref();
 setTimeout(digest, 20 * 1000).unref();
 setInterval(digest, 15 * 60 * 1000).unref();
+// Los recordatorios, cada minuto: cada uno avisa a la hora que se le haya puesto.
+setInterval(() => pushReminders().catch((e) => console.error('Error enviando recordatorios', e)), 60 * 1000).unref();
 
 function shutdown() {
   server.close();

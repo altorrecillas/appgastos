@@ -12,6 +12,9 @@ import { applyTint, reapplyTint } from './tint.js';
 import { avatar } from './photo.js';
 import { applyPrefs, isSimple } from './prefs.js';
 
+// En el iPhone, Safari no hace caso a «user-scalable=no»: se anulan sus gestos de pellizco para que la página no se amplíe.
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+
 // Versión de esta página (la pone el servidor): se enseña en Ajustes y sirve para avisar cuando hay una nueva.
 export const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '';
 

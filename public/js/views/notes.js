@@ -2,7 +2,7 @@
 // En el ordenador, tres columnas (cuadernos · lista · nota); en el móvil, la lista y la nota a pantalla completa.
 import { ApiError, del, get, hapi, hurl, patch, post, uploadNoteImage } from '../api.js';
 import {
-  $, confirmDialog, download, esc, fmtDate, html, icon, on, openMenu, plural, promptDialog, raw, sheet, timeAgo, toast, toastError, today, withBusy, skeletonPage,
+  $, confirmDialog, download, esc, fmtDate, focusLater, html, icon, on, openMenu, plural, promptDialog, raw, sheet, timeAgo, toast, toastError, today, withBusy, skeletonPage,
 } from '../ui.js';
 import { store } from '../store.js';
 import { renderMarkdown, taskProgress, toggleTask } from '../markdown.js';
@@ -241,7 +241,8 @@ export default async function notesView(ctx) {
       $('[data-pw]', s.el).hidden = !protect();
       $('[data-plainnote]', s.el).hidden = protect();
       $('[data-dltext]', s.el).textContent = protect() ? 'Descargar copia protegida (.zip)' : 'Descargar copia (.zip)';
-      if (protect()) setTimeout(() => $('[data-p1]', s.el).focus(), 50);
+      // Sin quitar el cursor si ya se está escribiendo en la otra casilla.
+      if (protect()) focusLater($('[data-p1]', s.el), 50);
     });
     on(s.el, 'click', '[data-act=eye]', (e, b) => {
       const show = $('[data-p1]', s.el).type === 'password';

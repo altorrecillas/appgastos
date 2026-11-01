@@ -14,6 +14,7 @@ const TITLES = {
   vaccine: { dog: ['Rabia', 'Polivalente', 'Leishmaniosis', 'Tos de las perreras'], cat: ['Trivalente felina', 'Leucemia felina', 'Rabia'], other: ['Rabia'] },
   deworming: { any: ['Desparasitación interna', 'Desparasitación externa (pipeta)', 'Collar antiparasitario'] },
   vet: { any: ['Revisión anual', 'Consulta', 'Análisis de sangre', 'Urgencias', 'Dentista'] },
+  food: { dog: ['Pienso', 'Comida húmeda', 'Premios y snacks'], cat: ['Pienso', 'Latas y sobres', 'Premios'], any: ['Comida', 'Premios'] },
   grooming: { any: ['Baño y corte', 'Corte de uñas', 'Limpieza de oídos'] },
   medication: { any: ['Antibiótico', 'Antiinflamatorio', 'Tratamiento crónico'] },
   weight: { any: ['Peso'] },
@@ -140,11 +141,12 @@ async function petDetail(ctx, id) {
       : tab === 'gastos' ? html`<section class="panel"><div class="panel-head"><h2>Últimos 12 meses</h2></div>
         <div class="chart short" id="pchart" role="img" aria-label="Gasto mensual"></div></section>
         <section class="panel" style="margin-top:18px"><div class="panel-head"><h2>Movimientos</h2>
-          <div class="actions"><a class="btn ghost sm" href="#/movimientos?pet=${p.id}&period=all">Ver en movimientos</a></div></div>
+          <div class="actions">${can('edit') ? html`<button class="btn sm" data-act="expense">${icon('plus', 'sm')}Anotar gasto</button>` : ''}
+            <a class="btn ghost sm" href="#/movimientos?pet=${p.id}&period=all">Ver todos</a></div></div>
           ${p.expenses.length ? html`<div class="rows">${p.expenses.slice(0, 30).map((t) => html`<div class="rowi">
             <span class="cat-dot sm"><span class="emoji">${t.category_icon || '🐾'}</span></span>
             <span class="main-txt"><span class="title">${t.description || t.merchant}</span><span class="meta">${fmtDateFull(t.date)}${t.merchant ? ` · ${t.merchant}` : ''}</span></span>
-            <span class="amount">${money(t.amount)}</span></div>`)}</div>` : html`<p class="muted small">Sin gastos asociados. Al anotar un gasto puedes indicar la mascota en «Más detalles».</p>`}</section>`
+            <span class="amount">${money(t.amount)}</span></div>`)}</div>` : html`<p class="muted small">Aún no hay gastos de ${p.name}. Con «Anotar gasto» apuntas la comida, el veterinario o la peluquería, y queda como gasto de ${p.name}.</p>`}</section>`
       : html`<section class="panel"><dl class="kv">
           <dt>Especie</dt><dd>${SPECIES[p.species]?.emoji} ${SPECIES[p.species]?.name}</dd>
           <dt>Raza</dt><dd>${p.breed || '—'}</dd>
@@ -201,6 +203,7 @@ async function petDetail(ctx, id) {
   });
   on(ctx.el, 'click', '[data-act=edit]', () => petForm(pet));
   on(ctx.el, 'click', '[data-act=weight]', () => eventForm(pet, null, 'weight'));
+  on(ctx.el, 'click', '[data-act=expense]', () => eventForm(pet, null, 'food'));
   on(ctx.el, 'click', '[data-act=event]', () => eventForm(pet));
   on(ctx.el, 'click', '[data-ev]', (e, b) => eventForm(pet, pet.events.find((x) => x.id === Number(b.dataset.ev))));
   const headerEl = document.getElementById('page-actions');
@@ -215,7 +218,9 @@ function eventForm(pet, ev = null, presetType = null) {
   const editing = !!ev;
   const d = { type: presetType || 'vaccine', title: '', date: today(), next_date: '', weight: '', notes: '', cost: null, ...(ev || {}) };
   const body = (type) => {
-    const sugg = TITLES[type]?.[pet.species] || TITLES[type]?.any || TITLES[type]?.other || [];
+    let sugg = TITLES[type]?.[pet.species] || TITLES[type]?.any || TITLES[type]?.other || [];
+    // La comida que pone su ficha («Pienso Advance Medium Adult…»), la primera.
+    if (type === 'food' && pet.food) sugg = [pet.food.split(/[,.;(]/)[0].trim().slice(0, 80), ...sugg].filter((x, i, a) => x && a.indexOf(x) === i);
     return html`<form class="form" id="evf" autocomplete="off">
       <div class="field"><label>¿Qué ha sido?</label>${chipPicker('type', Object.entries(PET_EVENTS).map(([value, x]) => ({ value, label: x.name, emoji: x.emoji })), type, { optional: false })}</div>
       ${type !== 'weight' ? html`<div class="field"><label for="ev-t">Título</label><input class="input" id="ev-t" name="title" value="${d.title}" maxlength="80" list="ev-sug" placeholder="${sugg[0] || 'Descripción'}">

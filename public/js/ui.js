@@ -469,11 +469,11 @@ export function download(url) {
   a.remove();
 }
 export const FREQ_NAMES = {
-  weekly: 'Semanal', biweekly: 'Quincenal', monthly: 'Mensual', bimonthly: 'Bimestral', quarterly: 'Trimestral',
+  weekly: 'Semanal', biweekly: 'Quincenal', fourweekly: 'Cada 4 semanas', monthly: 'Mensual', bimonthly: 'Bimestral', quarterly: 'Trimestral',
   fourmonthly: 'Cuatrimestral', semiannual: 'Semestral', annual: 'Anual',
 };
 export const FREQ_EVERY = {
-  weekly: 'cada semana', biweekly: 'cada dos semanas', monthly: 'cada mes', bimonthly: 'cada dos meses', quarterly: 'cada tres meses',
+  weekly: 'cada semana', biweekly: 'cada dos semanas', fourweekly: 'cada cuatro semanas', monthly: 'cada mes', bimonthly: 'cada dos meses', quarterly: 'cada tres meses',
   fourmonthly: 'cada cuatro meses', semiannual: 'cada seis meses', annual: 'cada año',
 };
 export const METHOD_NAMES = { card: 'Tarjeta', cash: 'Efectivo', transfer: 'Transferencia', direct_debit: 'Domiciliación', bizum: 'Bizum', other: 'Otro' };
@@ -485,7 +485,7 @@ export const SPECIES = {
 };
 export const PET_EVENTS = {
   vaccine: { name: 'Vacuna', emoji: '💉' }, deworming: { name: 'Desparasitación', emoji: '🪱' }, vet: { name: 'Veterinario', emoji: '🩺' },
-  grooming: { name: 'Peluquería', emoji: '✂️' }, medication: { name: 'Medicación', emoji: '💊' }, weight: { name: 'Peso', emoji: '⚖️' },
+  food: { name: 'Comida', emoji: '🦴' }, grooming: { name: 'Peluquería', emoji: '✂️' }, medication: { name: 'Medicación', emoji: '💊' }, weight: { name: 'Peso', emoji: '⚖️' },
   other: { name: 'Otro', emoji: '📝' },
 };
 export const ROLE_NAMES = { owner: 'Propietario', admin: 'Administrador', editor: 'Editor', viewer: 'Solo lectura' };

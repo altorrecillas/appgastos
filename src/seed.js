@@ -17,6 +17,7 @@ export const DEFAULT_CATEGORIES = [
   { kind: 'expense', name: 'Mascotas', icon: '🐾', color: '#8C6D46' },
   { kind: 'expense', name: 'Restaurantes', icon: '🍽️', color: '#E87BA4' },
   { kind: 'expense', name: 'Ocio y suscripciones', icon: '🎬', color: '#9333EA' },
+  { kind: 'expense', name: 'Gimnasio y deporte', icon: '🏋️', color: '#0EA5E9' },
   { kind: 'expense', name: 'Ropa y calzado', icon: '👕', color: '#B5487A' },
   { kind: 'expense', name: 'Seguros', icon: '🛡️', color: '#5B6B82' },
   { kind: 'expense', name: 'Impuestos y tasas', icon: '🧾', color: '#C2410C' },

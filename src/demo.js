@@ -102,7 +102,7 @@ export function loadDemo(hid, user) {
   recur({ name: 'Fibra y móviles', provider: 'Movistar', amount: 7490, frequency: 'monthly', start_date: dayIn(8), category_id: C('Teléfono e internet') });
   recur({ name: 'Netflix', provider: 'Netflix', amount: 1399, frequency: 'monthly', start_date: dayIn(14), category_id: C('Ocio y suscripciones'), method: 'card' });
   recur({ name: 'Spotify Familiar', provider: 'Spotify', amount: 2199, frequency: 'monthly', start_date: dayIn(20), category_id: C('Ocio y suscripciones'), method: 'card' });
-  recur({ name: 'Gimnasio', provider: 'Basic-Fit', amount: 3499, frequency: 'monthly', start_date: dayIn(3), category_id: C('Salud'), person_id: laura });
+  recur({ name: 'Gimnasio', provider: 'Basic-Fit', amount: 3499, frequency: 'fourweekly', start_date: dayIn(3), category_id: C('Gimnasio y deporte') ?? C('Salud'), person_id: laura });
   recur({ name: 'Inglés extraescolar', provider: 'Academia Oxford', amount: 4500, frequency: 'monthly', start_date: dayIn(2), category_id: C('Educación'), person_id: lucia });
   recur({ name: 'Peluquería de Luna', provider: 'Guau Estilistas', amount: 3500, frequency: 'bimonthly', start_date: dayIn(16), category_id: C('Mascotas'), pet_id: luna, method: 'card' });
   recur({ name: 'Pienso de Luna', provider: 'Tiendanimal', amount: 5490, frequency: 'monthly', start_date: dayIn(11), category_id: C('Mascotas'), pet_id: luna, method: 'card' });

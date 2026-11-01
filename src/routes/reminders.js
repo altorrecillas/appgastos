@@ -18,7 +18,13 @@ const spec = {
   person_id: [v.int(), 'Persona'],
   repeat: [v.oneOf(REPEATS, { required: true }), 'Repetición'],
   remind_days: [v.int({ min: 0, max: 90 }), 'Días de antelación'],
+  remind_time: [v.str({ max: 5, pattern: /^([01]\d|2[0-3]):[0-5]\d$/ }), 'Hora del aviso'],
   notes: [v.str({ max: 1000 }), 'Notas'],
+};
+// Sin hora (vacío), el aviso sale a la hora de los avisos del día.
+const cleanTime = (d) => {
+  if (d.remind_time === '') d.remind_time = null;
+  return d;
 };
 
 const SELECT = `
@@ -56,7 +62,7 @@ r.get('/', (req, res) => {
 });
 
 r.post('/', (req, res) => {
-  const data = validate(req.body, spec);
+  const data = cleanTime(validate(req.body, spec));
   checkRefs(data, req.hid);
   if (data.kind === 'date') data.amount = null;
   const id = insert('reminders', { ...data, household_id: req.hid, created_by: req.user.id });
@@ -66,7 +72,7 @@ r.post('/', (req, res) => {
 
 r.patch('/:id', (req, res) => {
   const id = idParam(req.params.id);
-  const data = validate(req.body, spec, { partial: true });
+  const data = cleanTime(validate(req.body, spec, { partial: true }));
   checkRefs(data, req.hid);
   if (!update('reminders', id, req.hid, data) && Object.keys(data).length) throw notFound('Recordatorio');
   changed(req, 'reminders', 'update', id);

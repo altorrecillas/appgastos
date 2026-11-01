@@ -9,10 +9,13 @@ import { createTransaction } from './transactions.js';
 const r = express.Router();
 
 export const SPECIES = ['dog', 'cat', 'bird', 'fish', 'rabbit', 'rodent', 'reptile', 'horse', 'other'];
-export const EVENT_TYPES = ['vaccine', 'deworming', 'vet', 'grooming', 'medication', 'weight', 'other'];
+export const EVENT_TYPES = ['vaccine', 'deworming', 'vet', 'food', 'grooming', 'medication', 'weight', 'other'];
 const EVENT_NAMES = {
-  vaccine: 'Vacuna', deworming: 'Desparasitación', vet: 'Veterinario', grooming: 'Peluquería', medication: 'Medicación', weight: 'Peso', other: 'Otro',
+  vaccine: 'Vacuna', deworming: 'Desparasitación', vet: 'Veterinario', food: 'Comida', grooming: 'Peluquería', medication: 'Medicación', weight: 'Peso',
+  other: 'Otro',
 };
+// Lo que se paga en la clínica: el gasto lleva la veterinaria como comercio (la comida o la peluquería, no).
+const AT_VET = ['vaccine', 'deworming', 'vet', 'medication'];
 
 const petSpec = {
   name: [v.str({ required: true, max: 40 }), 'Nombre'],
@@ -159,7 +162,7 @@ r.post('/:id/events', (req, res) => {
     if (cost.cost && cost.cost > 0) {
       transactionId = createTransaction(req, {
         kind: 'expense', amount: cost.cost, date: data.date, description: `${pet.name}: ${data.title}`,
-        merchant: cost.merchant || pet.vet || '', category_id: cost.category_id ?? petCategory(req.hid), pet_id: petId,
+        merchant: cost.merchant || (AT_VET.includes(data.type) ? pet.vet : '') || '', category_id: cost.category_id ?? petCategory(req.hid), pet_id: petId,
         method: cost.method,
       });
     }
@@ -188,7 +191,8 @@ r.patch('/:id/events/:eid', (req, res) => {
         const pet = one('SELECT * FROM pets WHERE id = ?', petId);
         const tid = createTransaction(req, {
           kind: 'expense', amount: cost.cost, date: data.date || ev.date, description: `${pet.name}: ${data.title || ev.title}`,
-          merchant: cost.merchant || pet.vet || '', category_id: cost.category_id ?? petCategory(req.hid), pet_id: petId, method: cost.method,
+          merchant: cost.merchant || (AT_VET.includes(data.type || ev.type) ? pet.vet : '') || '', category_id: cost.category_id ?? petCategory(req.hid), pet_id: petId,
+          method: cost.method,
         });
         run('UPDATE pet_events SET transaction_id = ? WHERE id = ?', tid, eid);
       }

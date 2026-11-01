@@ -113,7 +113,7 @@ export function validate(body, spec, { partial = false } = {}) {
 }
 
 export const METHODS = ['card', 'cash', 'transfer', 'direct_debit', 'bizum', 'other'];
-export const FREQUENCIES = ['weekly', 'biweekly', 'monthly', 'bimonthly', 'quarterly', 'fourmonthly', 'semiannual', 'annual'];
+export const FREQUENCIES = ['weekly', 'biweekly', 'fourweekly', 'monthly', 'bimonthly', 'quarterly', 'fourmonthly', 'semiannual', 'annual'];
 
 // ---------- Fechas (siempre 'YYYY-MM-DD' en hora local del servidor) ----------
 
@@ -142,7 +142,8 @@ export function addMonthsAnchored(s, months, anchorDay) {
 }
 
 const FREQ_MONTHS = { monthly: 1, bimonthly: 2, quarterly: 3, fourmonthly: 4, semiannual: 6, annual: 12 };
-const FREQ_DAYS = { weekly: 7, biweekly: 14 };
+// «Cada 4 semanas» (como cobra Basic-Fit) no es mensual: son 13 cobros al año y algún mes caen dos.
+const FREQ_DAYS = { weekly: 7, biweekly: 14, fourweekly: 28 };
 
 // Siguiente fecha de un pago periódico a partir de `from`, anclado al día de inicio.
 export function nextOccurrence(frequency, from, startDate) {

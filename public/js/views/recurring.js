@@ -17,7 +17,7 @@ import { catAxis, grid, mountChart, tipBox, tipHTML, valAxis } from '../charts.j
 
 const NOTICE = [{ value: 0, label: 'No avisar' }, { value: 1, label: '1 día antes' }, { value: 3, label: '3 días antes' }, { value: 7, label: '1 semana antes' }];
 const FREQ_M = { monthly: 1, bimonthly: 2, quarterly: 3, fourmonthly: 4, semiannual: 6, annual: 12 };
-const FREQ_D = { weekly: 7, biweekly: 14 };
+const FREQ_D = { weekly: 7, biweekly: 14, fourweekly: 28 };
 const pad = (n) => String(n).padStart(2, '0');
 function addMonthsAnchored(s, months, anchor) {
   const [y, m] = s.split('-').map(Number);

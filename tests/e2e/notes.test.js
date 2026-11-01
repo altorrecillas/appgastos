@@ -72,6 +72,11 @@ describe('notas en el navegador', { skip: SKIP }, () => {
     const p = a.page;
     await p.click('.nb-pane [data-act=backup]');
     await p.click('dialog[open] label.switch:has([data-protect])');
+    // Escribir enseguida en «Repítela» no lleva el texto a la primera casilla (la app pone ahí el cursor con retraso).
+    await p.locator('dialog[open] [data-p2]').focus();
+    await p.waitForTimeout(150);
+    await p.keyboard.type('xyz');
+    assert.deepEqual([await p.inputValue('dialog[open] [data-p1]'), await p.inputValue('dialog[open] [data-p2]')], ['', 'xyz']);
     await p.fill('dialog[open] [data-p1]', PASSWORD);
     await p.fill('dialog[open] [data-p2]', PASSWORD);
     assert.equal((await p.textContent('dialog[open] [data-dltext]')).trim(), 'Descargar copia protegida (.zip)');

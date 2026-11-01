@@ -601,14 +601,71 @@ const migrations = [
   CREATE INDEX idx_tx_recurring ON transactions(recurring_id, date);
   CREATE INDEX idx_tx_list ON transactions(list_id);
   `,
+
+  // v12 — pagos «cada 4 semanas» y la categoría «Gimnasio y deporte».
+  // SQLite no deja cambiar la lista de frecuencias permitidas: se rehace la tabla de pagos fijos con los mismos datos
+  // (con las claves ajenas en pausa, para que los movimientos y facturas sigan enlazados a su pago).
+  (conn) => {
+    const { sql } = conn.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'recurring'`).get();
+    const next = sql.replace(`'semiannual','annual')`, `'semiannual','annual','fourweekly')`).replace(/^CREATE TABLE\s+"?recurring"?/, 'CREATE TABLE recurring_new');
+    if (next === sql || !next.includes('fourweekly') || !next.startsWith('CREATE TABLE recurring_new')) throw new Error('No se reconoce la tabla de pagos fijos');
+    const cols = conn.prepare('PRAGMA table_info(recurring)').all().map((c) => `"${c.name}"`).join(', ');
+    conn.exec(next);
+    conn.exec(`INSERT INTO recurring_new (${cols}) SELECT ${cols} FROM recurring`);
+    conn.exec('DROP TABLE recurring');
+    conn.exec('ALTER TABLE recurring_new RENAME TO recurring');
+    conn.exec('CREATE INDEX idx_recurring_h ON recurring(household_id, active, next_date)');
+    // «Gimnasio y deporte», justo después de «Ocio y suscripciones», en los hogares que aún no tengan algo así.
+    for (const h of conn.prepare(`SELECT id FROM households h WHERE NOT EXISTS (SELECT 1 FROM categories c WHERE c.household_id = h.id AND c.kind = 'expense'
+        AND (lower(c.name) LIKE 'gimnasio%' OR lower(c.name) LIKE 'deporte%'))`).all()) {
+      const ocio = conn.prepare(`SELECT sort FROM categories WHERE household_id = ? AND kind = 'expense' AND name = 'Ocio y suscripciones'`).get(h.id);
+      const sort = ocio ? ocio.sort + 1 : conn.prepare('SELECT COALESCE(MAX(sort), 0) + 1 AS s FROM categories WHERE household_id = ?').get(h.id).s;
+      if (ocio) conn.prepare('UPDATE categories SET sort = sort + 1 WHERE household_id = ? AND sort >= ?').run(h.id, sort);
+      conn.prepare(`INSERT INTO categories (household_id, kind, name, icon, color, sort) VALUES (?, 'expense', 'Gimnasio y deporte', '🏋️', '#0EA5E9', ?)`).run(h.id, sort);
+    }
+  },
+
+  // v13 — mascotas: anotar la comida (pienso, latas…) con su gasto, como el resto de cuidados.
+  (conn) => rebuildTable(conn, 'pet_events', `'weight','other')`, `'weight','other','food')`, ['CREATE INDEX idx_pet_events ON pet_events(pet_id, date)']),
+
+  // v14 — recordatorios: a qué hora avisar (HH:MM; sin hora, a la de los avisos del día).
+  `
+  ALTER TABLE reminders ADD COLUMN remind_time TEXT;
+  `,
 ];
 
+// Rehace una tabla para cambiar una regla CHECK (SQLite no deja modificarla): la misma estructura y los mismos datos.
+function rebuildTable(conn, table, find, replace, indexes) {
+  const { sql } = conn.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table);
+  const next = sql.replace(find, replace).replace(new RegExp(`^CREATE TABLE\\s+"?${table}"?`), `CREATE TABLE ${table}_new`);
+  if (next === sql || !next.includes(replace) || !next.startsWith(`CREATE TABLE ${table}_new`)) throw new Error(`No se reconoce la tabla ${table}`);
+  const cols = conn.prepare(`PRAGMA table_info(${table})`).all().map((c) => `"${c.name}"`).join(', ');
+  conn.exec(next);
+  conn.exec(`INSERT INTO ${table}_new (${cols}) SELECT ${cols} FROM ${table}`);
+  conn.exec(`DROP TABLE ${table}`);
+  conn.exec(`ALTER TABLE ${table}_new RENAME TO ${table}`);
+  for (const ix of indexes) conn.exec(ix);
+}
+
+// Una migración que es una función rehace tablas: se ejecuta con las claves ajenas en pausa (solo se pueden pausar
+// fuera de la transacción) y al terminar se comprueba que todo sigue bien enlazado.
 const current = db.pragma('user_version', { simple: true });
 for (let v = current; v < migrations.length; v++) {
-  db.transaction(() => {
-    db.exec(migrations[v]);
-    db.pragma(`user_version = ${v + 1}`);
-  })();
+  const m = migrations[v];
+  const rebuild = typeof m === 'function';
+  if (rebuild) db.pragma('foreign_keys = OFF');
+  try {
+    db.transaction(() => {
+      if (rebuild) {
+        m(db);
+        const broken = db.pragma('foreign_key_check');
+        if (broken.length) throw new Error(`La migración ${v + 1} dejaría ${broken.length} enlaces rotos`);
+      } else db.exec(m);
+      db.pragma(`user_version = ${v + 1}`);
+    })();
+  } finally {
+    if (rebuild) db.pragma('foreign_keys = ON');
+  }
 }
 
 // Caché de sentencias preparadas: el mismo SQL se compila una sola vez.

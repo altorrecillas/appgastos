@@ -52,6 +52,37 @@ const money = (c, cur) => (c ? ` (${formatEuros(c, cur)})` : '');
 const when = (date, t) => (date === t ? 'Hoy' : date === addDays(t, 1) ? 'Mañana' : `El ${Number(date.slice(8))}/${Number(date.slice(5, 7))}`);
 
 // Revisión diaria (a partir de las 9:00): recordatorios, cuotas, facturas y mascotas.
+// Recordatorios a su hora: el día de antelación elegido, el mismo día y el siguiente si sigue pendiente; cada aviso a la hora
+// que tenga el recordatorio (o a la de los avisos del día) y una sola vez. Se mira cada minuto.
+export function remindersDue(now = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const t = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const dayHour = `${pad(Number(process.env.PUSH_HOUR || 9))}:00`;
+  const out = [];
+  for (const h of all('SELECT id, name, currency FROM households')) {
+    for (const m of activeReminders(h.id)) {
+      if (hhmm < (m.remind_time || dayHour)) continue;
+      const start = addDays(m.date, -(m.remind_days || 0));
+      if (t !== start && t !== m.date && t !== addDays(m.date, 1)) continue;
+      const overdue = m.date < t;
+      out.push({
+        key: `${h.id}:rem${m.id}:${t}`, hid: h.id,
+        payload: {
+          url: '/#/recordatorios', household: h.id,
+          title: overdue ? `Pendiente: ${m.title}` : `${when(m.date, t)}${m.remind_time && m.date === t ? ` a las ${m.remind_time}` : ''}: ${m.title}`,
+          body: `${m.kind === 'payment' ? 'Recordatorio de pago' : 'Recordatorio'}${money(m.amount, h.currency)} · ${h.name}`,
+        },
+      });
+    }
+  }
+  return out;
+}
+export async function pushReminders(now = new Date()) {
+  if (!one('SELECT 1 FROM push_subscriptions LIMIT 1')) return;
+  for (const r of remindersDue(now)) await once(r.key, r.hid, r.payload);
+}
+
 export async function pushDigest() {
   if (!one('SELECT 1 FROM push_subscriptions LIMIT 1')) return;
   if (new Date().getHours() < Number(process.env.PUSH_HOUR || 9)) return;
@@ -61,17 +92,6 @@ export async function pushDigest() {
     const tag = (k) => `${hid}:${k}:${t}`;
     const base = { url: '/#/inicio', household: hid };
 
-    for (const m of activeReminders(hid)) {
-      const start = addDays(m.date, -(m.remind_days || 0));
-      if (t === start || t === m.date || t === addDays(m.date, 1)) {
-        const overdue = m.date < t;
-        await once(tag(`rem${m.id}`), hid, {
-          ...base, url: '/#/recordatorios',
-          title: overdue ? `Pendiente: ${m.title}` : `${when(m.date, t)}: ${m.title}`,
-          body: `${m.kind === 'payment' ? 'Recordatorio de pago' : 'Recordatorio'}${money(m.amount, h.currency)} · ${h.name}`,
-        });
-      }
-    }
     for (const rec of all('SELECT * FROM recurring WHERE household_id = ? AND active = 1', hid)) {
       const pre = addDays(rec.next_date, -(rec.remind_days || 0));
       const manualDue = !rec.auto && (t === rec.next_date || t === addDays(rec.next_date, 1));

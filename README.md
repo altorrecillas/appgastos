@@ -50,7 +50,7 @@ Cada persona tiene su usuario y contraseña, y los hogares se comparten con quie
   directo, consumo por horas, vista previa para ajustar la detección y recuperación de los últimos días al
   enlazar. Lo anotado a mano antes de enlazar un aparato queda sustituido por lo medido (no cuenta dos veces).
 - **Recordatorios**: pagos puntuales y fechas importantes (ITV, renovar el DNI, cumpleaños…), con
-  repetición, aviso con antelación y «hecho y anotar el pago».
+  repetición, aviso con antelación (o el mismo día) a la hora que elijas y «hecho y anotar el pago».
 - **Calendario** de pagos del mes, **avisos** en la campana y **notificaciones push** en el móvil.
 - **Lista de la compra** compartida en tiempo real, agrupada por secciones del súper, con sugerencias de
   lo que más compráis. «Terminar compra» anota el ticket como gasto.

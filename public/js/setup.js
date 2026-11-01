@@ -21,7 +21,7 @@ const FIXED = [
   ['Agua', '💧', 'Luz, agua y gas', 'bimonthly', 1, 'direct_debit', 40, 20], ['Gas', '🔥', 'Luz, agua y gas', 'bimonthly', 1, 'direct_debit', 50, 20],
   ['Internet y móvil', '📶', 'Teléfono e internet', 'monthly', 0, 'direct_debit', 55, 5], ['Seguro de hogar', '🛡️', 'Seguros', 'annual', 0, 'direct_debit', 250, 1],
   ['Seguro del coche', '🚗', 'Seguros', 'annual', 0, 'direct_debit', 450, 1], ['Seguro de salud', '🩺', 'Seguros', 'monthly', 0, 'direct_debit', 60, 1],
-  ['Préstamo', '💳', 'Otros gastos', 'monthly', 0, 'direct_debit', 200, 5], ['Gimnasio', '🏋️', 'Ocio y suscripciones', 'monthly', 0, 'direct_debit', 35, 1],
+  ['Préstamo', '💳', 'Otros gastos', 'monthly', 0, 'direct_debit', 200, 5], ['Gimnasio', '🏋️', 'Gimnasio y deporte', 'monthly', 0, 'direct_debit', 35, 1],
   ['Netflix', '🎬', 'Ocio y suscripciones', 'monthly', 0, 'card', 13.99, 10], ['Spotify', '🎧', 'Ocio y suscripciones', 'monthly', 0, 'card', 10.99, 10],
   ['Disney+', '🏰', 'Ocio y suscripciones', 'monthly', 0, 'card', 9.99, 10], ['Max', '📺', 'Ocio y suscripciones', 'monthly', 0, 'card', 9.99, 10],
   ['Amazon Prime', '📦', 'Ocio y suscripciones', 'annual', 0, 'card', 49.9, 1], ['Colegio', '🎓', 'Educación', 'monthly', 0, 'direct_debit', 120, 5],
@@ -29,8 +29,8 @@ const FIXED = [
   ['Extraescolares', '⚽', 'Educación', 'monthly', 0, 'direct_debit', 40, 5], ['IBI', '🧾', 'Impuestos y tasas', 'annual', 0, 'direct_debit', 350, 1],
   ['Impuesto de circulación', '🚘', 'Impuestos y tasas', 'annual', 0, 'direct_debit', 80, 1],
 ].map(([name, emoji, category, frequency, variable, method, example, day]) => ({ name, emoji, category, frequency, variable, method, example, day }));
-const PER_MONTH = { weekly: 52 / 12, biweekly: 26 / 12, monthly: 1, bimonthly: 1 / 2, quarterly: 1 / 3, fourmonthly: 1 / 4, semiannual: 1 / 6, annual: 1 / 12 };
-const FREQ_SHORT = { monthly: 'al mes', bimonthly: 'cada 2 meses', quarterly: 'cada 3 meses', semiannual: 'cada 6 meses', annual: 'al año', weekly: 'a la semana' };
+const PER_MONTH = { weekly: 52 / 12, biweekly: 26 / 12, fourweekly: 365 / 28 / 12, monthly: 1, bimonthly: 1 / 2, quarterly: 1 / 3, fourmonthly: 1 / 4, semiannual: 1 / 6, annual: 1 / 12 };
+const FREQ_SHORT = { fourweekly: 'cada 4 semanas', monthly: 'al mes', bimonthly: 'cada 2 meses', quarterly: 'cada 3 meses', semiannual: 'cada 6 meses', annual: 'al año', weekly: 'a la semana' };
 const HOUSE_ICONS = ['🏠', '🏡', '🏘️', '🏢', '🏰', '🛖', '⛺', '🌻', '🌊', '🌳', '🐾', '❤️'];
 const KID_EMOJIS = ['👧', '👦', '🧒', '👶', '👵', '👴', '👩', '👨', '🧑'];
 const STEPS = ['Vuestra casa', 'Lo que entra', 'Lo que pagáis', 'Presupuesto', 'La familia', 'Listo'];

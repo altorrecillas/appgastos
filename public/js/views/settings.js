@@ -437,7 +437,7 @@ export default async function settingsView(ctx) {
       <p class="small muted" style="margin-top:14px">En iPhone hay que añadir antes ${NAME} a la pantalla de inicio (Compartir → Añadir a pantalla de inicio) y abrirla desde ahí.</p>
     </section>
     <section class="panel"><div class="panel-head"><h2>Cuándo avisamos</h2></div><dl class="kv small">
-      <dt>Recordatorios</dt><dd>Con la antelación que elijas en cada uno, el mismo día y al día siguiente si sigue pendiente.</dd>
+      <dt>Recordatorios</dt><dd>A la hora que elijas en cada uno: con la antelación que pongas, el mismo día y al día siguiente si sigue pendiente.</dd>
       <dt>Pagos fijos y plazos</dt><dd>Los días de antelación de cada pago y, si es manual, el día que toca.</dd>
       <dt>Facturas</dt><dd>3 días antes de vencer, el día del vencimiento y al día siguiente si sigue sin pagar.</dd>
       <dt>Mascotas</dt><dd>3 días antes de cada vacuna o desparasitación y ese mismo día.</dd></dl></section>`;
