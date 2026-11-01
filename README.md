@@ -30,6 +30,8 @@ Cada persona tiene su usuario y contraseña, y los hogares se comparten con quie
   el presupuesto y quién gastó, con una imagen para compartir por WhatsApp. El día 1 llega como notificación.
 - **Ingresos**: nómina, trabajos extra, devoluciones… como movimientos sueltos o como **ingresos fijos**
   que se anotan solos cada mes. Balance, tasa de ahorro y **balance previsto al cierre** se recalculan al momento.
+  Si una nómina cambia de un mes a otro, el día que elijas la app pregunta si la de cada persona es igual que la
+  anterior o cuánto es, y la previsión usa esa cantidad (*Ajustes → Hogar → Nóminas que cambian cada mes*).
 - **Pagos fijos**: semanales, quincenales, mensuales, **bimestrales**, trimestrales, cuatrimestrales,
   semestrales y anuales. Automáticos o manuales, con importe variable, saltar cuota y pausar.
 - **Compras a plazos**: precio, entrada, número de cuotas y fecha de la primera. Calcula la cuota
@@ -206,6 +208,9 @@ Avisos que puedes ignorar:
 - `npm WARN tar TAR_ENTRY_ERROR EINVAL: invalid argument, fchown`: en un contenedor sin privilegios npm no puede
   poner a los archivos el dueño que traían de origen; se instalan bien igual.
 - `npm WARN deprecated prebuild-install`: es la herramienta que descarga SQLite ya compilado; funciona.
+- Un bloque de `npm ERR!` seguido de `==> Instalando herramientas de compilación y reintentando`: con una conexión
+  lenta, la descarga de SQLite ya compilado puede caducar (`Request timed out`). El instalador lo reintenta solo;
+  lo que cuenta es que termine con `GastosbyATH está funcionando en el puerto 8080`.
 
 El contenedor solo **descarga** de GitHub: no tiene ninguna clave de GitHub y `pushurl=no-push` hace que cualquier
 `git push` falle. Los datos viven en `/var/lib/gastosbyath`, fuera de la carpeta de git, así que no pueden acabar
@@ -314,6 +319,24 @@ bash deploy/install.sh
 Si la versión nueva había cambiado la base de datos, restaura también la copia que se hizo justo antes de
 actualizar (ver *Copias de seguridad*: es la `gastosbyath-….db` más reciente de antes de la actualización).
 Para volver después a la última versión, basta con `bash /root/gastosbyath/deploy/actualizar.sh`.
+
+## Versiones
+
+La versión de la app está en `package.json` (por ejemplo `0.44.0`, que se enseña como **0.44**) y sus novedades
+en [CHANGELOG.md](CHANGELOG.md). Se ve en *Ajustes → Aplicación* y al pie del menú *Más*.
+
+Cada mejora sube la versión:
+
+```bash
+npm run subir-version -- "Qué hay de nuevo" "Otra novedad"     # 0.44 → 0.45
+npm run subir-version -- arreglo "Qué se ha arreglado"          # 0.45 → 0.45.1
+```
+
+Así, al subirla a GitHub y actualizar el contenedor:
+
+- `actualizar.sh` enseña `Versión 0.44 → 0.45` y sus novedades;
+- los móviles con la app abierta muestran «Hay una versión nueva» con un botón para actualizar, y la próxima
+  vez que se abre ya carga la nueva (el service worker lleva la versión: al cambiar, se renueva solo).
 
 ## Copias de seguridad
 

@@ -331,7 +331,7 @@ export default async function recurringView(ctx) {
       </div>
       ${amountField('amount', d.amount, { kind: k })}
       <label class="switch" style="justify-content:center"><input type="checkbox" name="variable" ${d.variable ? 'checked' : ''}><span class="track"></span>
-        <span class="txt">El importe cambia cada vez<small>${k === 'income' ? 'Pon una cantidad aproximada: al cobrar podrás ajustarla.' : 'Luz, agua… Pon una estimación; al pagar podrás ajustarla.'}</small></span></label>
+        <span class="txt">El importe cambia cada vez<small>${k === 'income' ? 'Pon la cantidad de la última: cada mes te preguntaremos si cambia (se configura en Ajustes → Hogar).' : 'Luz, agua… Pon una estimación; al pagar podrás ajustarla.'}</small></span></label>
       <div class="field"><label>¿Cada cuánto?</label>${chipPicker('frequency', Object.entries(FREQ_NAMES).map(([value, label]) => ({ value, label })), d.frequency, { optional: false })}</div>
       <div class="grid-2">
         <div class="field"><label for="rf-start">${editing ? 'Próximo pago' : 'Fecha del próximo pago'}</label>
@@ -703,7 +703,7 @@ export default async function recurringView(ctx) {
   if (ctx.query.new) {
     history.replaceState(null, '', `#/fijos${tab !== 'fijos' ? `?tab=${tab}` : ''}`);
     if (tab === 'plazos') planForm();
-    else fixedForm(null, 'expense', prefillFrom(ctx.query));
+    else fixedForm(null, ctx.query.kind === 'income' ? 'income' : 'expense', prefillFrom(ctx.query));
   }
 }
 
@@ -712,6 +712,7 @@ function prefillFrom(q) {
   const out = {};
   if (q.name) out.name = String(q.name).slice(0, 60);
   if (/^\d+$/.test(q.amount || '')) out.amount = Number(q.amount);
+  if (q.variable === '1') out.variable = 1;
   const day = Number(q.day);
   if (day >= 1 && day <= 31) {
     const t = new Date();

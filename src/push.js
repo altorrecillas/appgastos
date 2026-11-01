@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR, all, one, run } from './db.js';
 import { addDays, formatEuros, today } from './util.js';
-import { amountFor, labelFor } from './routes/recurring.js';
+import { amountFor, incomeQuestions, labelFor } from './routes/recurring.js';
+import { incomeCheck } from './routes/household.js';
 import { petReminders } from './routes/pets.js';
 import { activeReminders } from './routes/reminders.js';
 import { computeInsights } from './insights.js';
@@ -55,7 +56,7 @@ export async function pushDigest() {
   if (!one('SELECT 1 FROM push_subscriptions LIMIT 1')) return;
   if (new Date().getHours() < Number(process.env.PUSH_HOUR || 9)) return;
   const t = today();
-  for (const h of all('SELECT id, name, currency FROM households')) {
+  for (const h of all('SELECT id, name, currency, income_check FROM households')) {
     const hid = h.id;
     const tag = (k) => `${hid}:${k}:${t}`;
     const base = { url: '/#/inicio', household: hid };
@@ -83,6 +84,16 @@ export async function pushDigest() {
           body: `${verb}${money(amount, h.currency)} · ${h.name}`,
         });
       }
+    }
+    // El día elegido: «¿cuánto es la nómina de este mes?», si hay nóminas que cambian sin confirmar.
+    const ask = incomeQuestions(hid, h, t);
+    if (ask.length && Number(t.slice(8)) === incomeCheck(h).day) {
+      const name = new Date(`${t.slice(0, 7)}-15T12:00`).toLocaleDateString('es-ES', { month: 'long' });
+      await once(tag('income-ask'), hid, {
+        ...base,
+        title: ask.length > 1 ? `¿Cuánto son las nóminas de ${name}?` : `¿Cuánto es «${ask[0].name}» de ${name}?`,
+        body: `Confírmalo para que la previsión del mes salga bien · ${h.name}`,
+      });
     }
     for (const b of all(`SELECT * FROM bills WHERE household_id = ? AND status = 'pending' AND due_date IS NOT NULL`, hid)) {
       if (t === addDays(b.due_date, -3) || t === b.due_date || t === addDays(b.due_date, 1)) {

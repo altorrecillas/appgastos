@@ -6,7 +6,7 @@ import {
   FREQUENCIES, METHODS, bad, formatEuros, idParam, monthlyEquivalent, nextOccurrence, notFound, today, v, validate,
 } from '../util.js';
 import { changed, emit } from '../events.js';
-import { ensureRef } from './household.js';
+import { ensureRef, incomeCheck } from './household.js';
 import { createTransaction } from './transactions.js';
 
 const r = express.Router();
@@ -295,6 +295,38 @@ r.delete('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Nóminas que cambian cada mes ----------
+// Desde el día elegido (el 1 por defecto) se pregunta el importe de este mes de cada ingreso fijo con importe variable
+// que aún no se ha cobrado ni confirmado. Lo que se conteste es el importe del mes y lo que usan las previsiones.
+export function incomeQuestions(hid, household, t = today()) {
+  const cfg = incomeCheck(household);
+  if (!cfg.enabled || Number(t.slice(8)) < cfg.day) return [];
+  const month = t.slice(0, 7);
+  return all(
+    `${SELECT} WHERE r.household_id = ? AND r.active = 1 AND r.kind = 'income' AND r.variable = 1 AND r.plan = 'fixed'
+        AND r.next_date <= ? AND (r.amount_month IS NULL OR r.amount_month <> ?) ORDER BY r.next_date, r.name`,
+    hid, `${month}-31`, month,
+  ).map((rec) => {
+    const last = one('SELECT amount, date FROM transactions WHERE recurring_id = ? ORDER BY date DESC, id DESC LIMIT 1', rec.id);
+    return {
+      id: rec.id, name: rec.name, provider: rec.provider, person_name: rec.person_name, month, date: rec.next_date, amount: rec.amount,
+      previous: last ? { amount: last.amount, date: last.date } : null,
+    };
+  });
+}
+
+// «La nómina de este mes es…»: pasa a ser su importe previsto (y deja de preguntarse este mes).
+r.post('/:id/month-amount', (req, res) => {
+  const id = idParam(req.params.id);
+  const rec = one('SELECT * FROM recurring WHERE id = ? AND household_id = ?', id, req.hid);
+  if (!rec) throw notFound('Pago fijo');
+  if (rec.kind !== 'income' || !rec.active) throw bad('Solo se puede confirmar el importe de un ingreso fijo activo');
+  const { amount } = validate(req.body || {}, { amount: [v.cents({ positive: true, required: true }), 'Importe'] });
+  run(`UPDATE recurring SET amount = ?, amount_month = ?, updated_at = datetime('now') WHERE id = ?`, amount, today().slice(0, 7), id);
+  changed(req, 'recurring', 'update', id, `${req.user.display_name} ha confirmado ${rec.name} de este mes (${formatEuros(amount, req.household.currency)})`);
+  res.json(decorate(one(`${SELECT} WHERE r.id = ?`, id)));
+});
+
 // Marca como pagada la cuota pendiente: crea el movimiento y avanza a la siguiente fecha.
 r.post('/:id/pay', (req, res) => {
   const id = idParam(req.params.id);
@@ -317,7 +349,9 @@ r.post('/:id/pay', (req, res) => {
     });
     const next = nextOccurrence(rec.frequency, rec.next_date, rec.start_date);
     const active = rec.end_date && next > rec.end_date ? 0 : 1;
-    run(`UPDATE recurring SET next_date = ?, active = ?, updated_at = datetime('now') WHERE id = ?`, next, active, id);
+    // Una nómina que cambia: lo cobrado es la referencia para el mes siguiente.
+    const keep = rec.kind === 'income' && rec.variable ? amount : rec.amount;
+    run(`UPDATE recurring SET next_date = ?, active = ?, amount = ?, updated_at = datetime('now') WHERE id = ?`, next, active, keep, id);
     return tid;
   })();
   changed(req, 'recurring', 'pay', id, `${req.user.display_name} ha pagado ${label} (${formatEuros(amount, req.household.currency)})`);

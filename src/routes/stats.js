@@ -2,7 +2,7 @@
 import express from 'express';
 import { all, one, run } from '../db.js';
 import { addDays, currentMonth, monthBounds, parseYmd, shiftMonth, today } from '../util.js';
-import { amountFor, decorate as decorateRecurring, labelFor, occurrences, processDue } from './recurring.js';
+import { amountFor, decorate as decorateRecurring, incomeQuestions, labelFor, occurrences, processDue } from './recurring.js';
 import { petReminders } from './pets.js';
 import { activeReminders, reminderDates } from './reminders.js';
 import { billPeriod, dayPrices, pendingEstimates, powerSettings } from '../power.js';
@@ -217,6 +217,8 @@ r.get('/dashboard', (req, res) => {
       plans: activePlans.sort((a, b) => b.progress - a.progress).slice(0, 4),
     },
     upcoming: upcoming(hid, 30),
+    // Nóminas que cambian: «¿la de este mes es igual que la anterior?».
+    income_questions: isCurrent ? incomeQuestions(hid, req.household, t) : [],
     recent: all(
       `SELECT t.*, c.name AS category_name, c.icon AS category_icon, c.color AS category_color, p.name AS person_name, u.display_name AS created_by_name
          FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN people p ON p.id = t.person_id

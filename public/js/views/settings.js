@@ -1,8 +1,8 @@
-// Ajustes: hogar, miembros, familia, categorías, cuenta, notificaciones, datos y apariencia.
+// Ajustes: hogar, miembros, familia, categorías, cuenta, notificaciones, datos, apariencia y aplicación (instalar, versión).
 import { api, del, get, hurl, patch, post } from '../api.js';
 import {
-  $, $$, COLORS, ROLE_NAMES, amountStr, confirmDialog, download, focusLater, html, icon, money, on, parseAmount, plural, promptDialog, sheet,
-  timeAgo, toast, toastError, withBusy,
+  $, $$, COLORS, ROLE_NAMES, amountStr, confirmDialog, download, esc, focusLater, html, icon, money, on, parseAmount, plural, promptDialog, raw,
+  sheet, timeAgo, toast, toastError, withBusy,
 } from '../ui.js';
 import { can, categories, loadHouse, pref, setHouse, setSession, store } from '../store.js';
 import { bindPickers, colorPicker, emojiPicker, notifyChange, readForm, showFormError } from '../forms.js';
@@ -10,11 +10,12 @@ import { disablePush, enablePush, pushStatus, testPush } from '../push.js';
 import { NAME } from '../brand.js';
 import { applyTint } from '../tint.js';
 import { avatar, bindPhotoField, photoField } from '../photo.js';
-import { bindPrefsControls, prefsControls } from '../app.js';
+import { APP_VERSION, bindPrefsControls, installInfo, prefsControls, promptInstall } from '../app.js';
 
 const SECTIONS = [
   ['hogar', 'Hogar', 'house'], ['miembros', 'Miembros', 'users'], ['familia', 'Familia', 'user'], ['categorias', 'Categorías', 'tag'],
   ['cuenta', 'Mi cuenta', 'key-round'], ['avisos', 'Notificaciones', 'bell'], ['datos', 'Copias y datos', 'archive'], ['apariencia', 'Apariencia', 'palette'],
+  ['app', 'Aplicación', 'smartphone'],
 ];
 const CURRENCIES = [['EUR', 'Euro (€)'], ['USD', 'Dólar (US$)'], ['GBP', 'Libra (£)'], ['MXN', 'Peso mexicano'], ['ARS', 'Peso argentino'], ['COP', 'Peso colombiano'], ['CLP', 'Peso chileno'], ['CHF', 'Franco suizo']];
 
@@ -30,13 +31,14 @@ export default async function settingsView(ctx) {
 
   async function draw() {
     let body = '';
-    if (section === 'hogar') body = hogar();
+    if (section === 'hogar') body = await hogar();
     else if (section === 'miembros') body = miembros();
     else if (section === 'familia') body = familia();
     else if (section === 'categorias') body = await categorias();
     else if (section === 'cuenta') body = await cuenta();
     else if (section === 'avisos') body = await avisos();
     else if (section === 'datos') body = datos();
+    else if (section === 'app') body = await aplicacion();
     else body = apariencia();
     if (!ctx.isCurrent()) return;
     ctx.el.innerHTML = String(html`<div class="settings-layout">
@@ -58,10 +60,75 @@ export default async function settingsView(ctx) {
   }
   bindPickers(ctx.el);
 
+  // ---------- Nóminas que cambian cada mes ----------
+  function nominas(incomes) {
+    const ic = store.house.household.income_check || { enabled: true, day: 1 };
+    const admin = can('admin');
+    const edit = can('edit');
+    return html`<section class="panel"><div class="panel-head"><h2>Nóminas que cambian cada mes</h2></div>
+      <div class="stack" style="gap:14px">
+        <p class="small ink-2">Si una nómina no es siempre igual, ${NAME} pregunta cada mes si la de ese mes es como la anterior o cuánto es,
+          y la previsión del mes usa esa cantidad. Si en casa cobráis varias personas, marca la nómina de cada una.</p>
+        <label class="switch"><input type="checkbox" data-ic-enabled ${ic.enabled ? 'checked' : ''} ${admin ? '' : 'disabled'}><span class="track"></span>
+          <span class="txt">Preguntar cada mes<small>Con una tarjeta en el Inicio y, si tienes los avisos activados, una notificación.</small></span></label>
+        <div class="field" style="max-width:280px"><label for="ic-day">A partir del día</label>
+          <select class="select" id="ic-day" data-ic-day ${admin && ic.enabled ? '' : 'disabled'}>
+            ${Array.from({ length: 28 }, (_, i) => i + 1).map((d) => html`<option value="${d}" ${ic.day === d ? 'selected' : ''}>${d === 1 ? 'Día 1 (al empezar el mes)' : `Día ${d}`}</option>`)}</select></div>
+        ${admin ? '' : html`<p class="small muted">Solo quien administra el hogar puede cambiar si se pregunta y desde qué día.</p>`}
+        <div class="stack" style="gap:10px"><span class="label">Qué nóminas preguntar</span>
+          ${incomes.length ? incomes.map((r) => html`<label class="switch"><input type="checkbox" data-variable="${r.id}" ${r.variable ? 'checked' : ''} ${edit ? '' : 'disabled'}><span class="track"></span>
+            <span class="txt">${r.name}${r.person_name && !r.name.includes(r.person_name) ? ` de ${r.person_name}` : ''}<small>${money(r.amount)} la última · cobro el día ${Number(r.next_date.slice(8))}</small></span></label>`)
+            : html`<p class="small muted">Aún no hay ninguna nómina anotada como ingreso fijo.</p>`}
+          ${edit ? html`<div><a class="btn sm" href="#/fijos?new=1&kind=income&name=N%C3%B3mina&variable=1">${icon('plus', 'sm')}Añadir una nómina</a></div>` : ''}
+        </div>
+      </div></section>`;
+  }
+
+  // ---------- Aplicación: instalarla, versión y novedades ----------
+  async function aplicacion() {
+    const i = installInfo();
+    let log = { version: APP_VERSION, versions: [] };
+    try {
+      log = await api('/changelog');
+    } catch { /* sin conexión: sin novedades */ }
+    // En las novedades, *cursiva* y `código` como en CHANGELOG.md (el resto, texto tal cual).
+    const fmt = (t) => raw(esc(t).replace(/\*([^*]+)\*/g, '<em>$1</em>').replace(/`([^`]+)`/g, '<code>$1</code>'));
+    const day = (d) => (d ? new Date(`${d}T12:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+    let install;
+    if (i.installed) install = html`<p class="app-state ok">${icon('circle-check')}<span>Ya la tienes instalada en este dispositivo.</span></p>`;
+    else if (!i.secure) {
+      install = html`<p class="app-state warn">${icon('triangle-alert')}<span>Ahora está abierta en <b>${location.origin}</b>, sin HTTPS, y así el
+        navegador no deja instalarla ni recibir avisos. Ábrela con su dirección segura (la de Tailscale, <b>https://…ts.net</b>) e instálala desde ahí.</span></p>`;
+    } else if (i.canPrompt) install = html`<div><button type="button" class="btn primary" data-act="install">${icon('download')}Instalar ${NAME}</button></div>`;
+    else if (i.ios) {
+      install = html`<p class="small ink-2">En Safari, toca <b>Compartir</b> y después <b>Añadir a pantalla de inicio</b>. En iPhone, los avisos solo funcionan con la app añadida así.</p>`;
+    } else install = html`<p class="small ink-2">Abre el menú del navegador (<b>⋮</b>) y elige <b>Instalar aplicación</b> o <b>Añadir a pantalla de inicio</b>.</p>`;
+    return html`
+      <section class="panel"><div class="panel-head"><h2>Instalar la app</h2></div>
+        <div class="stack" style="gap:12px">${install}
+          ${!i.installed && i.secure && !i.ios ? html`<details class="app-help"><summary>¿Le das a instalar y no pasa nada?</summary><ul>
+            <li>Tarda unos segundos y a veces el icono aparece con el resto de aplicaciones, no en la pantalla de inicio.</li>
+            <li>En Xiaomi, Redmi o POCO: en los ajustes del móvil, <b>Aplicaciones → Chrome → Otros permisos</b>, activa
+              <b>Accesos directos en la pantalla de inicio</b> y vuelve a intentarlo.</li>
+            <li>Si ya la instalaste, búscala con el resto de aplicaciones: el navegador no ofrece instalarla dos veces.</li>
+            <li>Usa Chrome: otros navegadores, como Firefox, solo añaden un acceso directo.</li>
+          </ul></details>` : ''}</div></section>
+      <section class="panel"><div class="panel-head"><h2>Versión</h2><span class="sub">${NAME} ${APP_VERSION}</span></div>
+        <div class="stack" style="gap:16px">
+          ${log.version && APP_VERSION && log.version !== APP_VERSION ? html`<div class="app-state info">${icon('sparkles')}<span class="grow">Ya está la versión ${log.version}.</span>
+            <button type="button" class="btn sm primary" data-act="reload">Actualizar ahora</button></div>` : ''}
+          ${log.versions.length ? html`<div class="changelog">${log.versions.slice(0, 6).map((v) => html`<article>
+              <h3>${v.version}${v.version === APP_VERSION ? html` <span class="pill">la que usas</span>` : ''}<small>${day(v.date)}</small></h3>
+              <ul>${v.items.map((x) => html`<li>${fmt(x)}</li>`)}</ul></article>`)}</div>`
+            : html`<p class="small muted">No se han podido cargar las novedades.</p>`}
+        </div></section>`;
+  }
+
   // ---------- Hogar ----------
-  function hogar() {
+  async function hogar() {
     const h = store.house.household;
     const admin = can('admin');
+    const incomes = (await get('/recurring').catch(() => [])).filter((r) => r.kind === 'income' && r.plan === 'fixed' && r.active);
     return html`
       <section class="panel"><div class="panel-head"><h2>Datos del hogar</h2></div>
         <form class="form" id="hf">
@@ -76,6 +143,7 @@ export default async function settingsView(ctx) {
               <span class="txt">Teñir la aplicación con este color<small>Botones, enlaces y la cabecera de Inicio. Ayuda a saber en qué hogar estás.</small></span></label>
             <div class="row"><button class="btn primary" type="submit">Guardar cambios</button></div>` : html`<p class="small muted">Solo quien administra el hogar puede cambiar estos datos.</p>`}
         </form></section>
+      ${nominas(incomes)}
       <section class="panel danger-zone"><div class="panel-head"><h2>Zona delicada</h2></div>
         <div class="stack">
           ${h.role !== 'owner' ? html`<div class="row between wrap"><div><b>Salir de este hogar</b><p class="small muted">Dejarás de ver sus datos. Podrán volver a invitarte.</p></div>
@@ -441,6 +509,40 @@ export default async function settingsView(ctx) {
       }
     });
   });
+  // Nóminas que cambian: preguntar o no, desde qué día y cuáles.
+  async function saveIncomeCheck(body) {
+    try {
+      setHouse(await patch('/income-check', body));
+      notifyChange('household');
+      toast(body.enabled === false ? 'Ya no se preguntarán las nóminas' : 'Guardado');
+    } catch (err) {
+      toastError(err);
+    }
+    draw();
+  }
+  on(ctx.el, 'change', '[data-ic-enabled]', (e, i) => saveIncomeCheck({ enabled: i.checked }));
+  on(ctx.el, 'change', '[data-ic-day]', (e, s) => saveIncomeCheck({ day: Number(s.value) }));
+  on(ctx.el, 'change', '[data-variable]', async (e, i) => {
+    try {
+      await patch(`/recurring/${i.dataset.variable}`, { variable: i.checked });
+      notifyChange('recurring');
+      toast(i.checked ? 'Se preguntará cada mes' : 'Ya no se preguntará');
+    } catch (err) {
+      i.checked = !i.checked;
+      toastError(err);
+    }
+  });
+  // Aplicación: instalar y recargar con la versión nueva.
+  on(ctx.el, 'click', '[data-act=install]', async () => {
+    if ((await promptInstall()) === 'accepted') toast('Instalando… En unos segundos la tendrás con el resto de aplicaciones.');
+    draw();
+  });
+  on(ctx.el, 'click', '[data-act=reload]', () => location.reload());
+  // Si el navegador anuncia que se puede instalar mientras se ve esta sección, aparece el botón.
+  const installable = () => setTimeout(() => section === 'app' && draw(), 0);
+  window.addEventListener('beforeinstallprompt', installable);
+  ctx.onCleanup(() => window.removeEventListener('beforeinstallprompt', installable));
+
   on(ctx.el, 'click', '[data-act=leave]', async () => {
     if (!(await confirmDialog({ title: '¿Salir de este hogar?', text: 'Dejarás de ver sus datos.', confirm: 'Salir', danger: true }))) return;
     try {

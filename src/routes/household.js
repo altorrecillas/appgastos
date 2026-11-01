@@ -16,7 +16,7 @@ export const ROLE_NAMES = { owner: 'propietario', admin: 'administrador', editor
 export function householdAccess(req, _res, next) {
   const hid = idParam(req.params.hid);
   const m = one(
-    `SELECT m.role, h.id, h.name, h.icon, h.color, h.currency, h.monthly_budget, h.tint, h.setup_done, h.created_at
+    `SELECT m.role, h.id, h.name, h.icon, h.color, h.currency, h.monthly_budget, h.tint, h.setup_done, h.income_check, h.created_at
        FROM memberships m JOIN households h ON h.id = m.household_id
       WHERE m.household_id = ? AND m.user_id = ?`,
     hid, req.user.id,
@@ -43,11 +43,20 @@ export function ensureRef(table, id, hid, label) {
 
 const r = express.Router();
 
+// Preguntar cada mes el importe de las nóminas que cambian: activado salvo que se quite, a partir del día 1.
+export function incomeCheck(household) {
+  let c = {};
+  try {
+    c = JSON.parse(household?.income_check || '{}');
+  } catch { /* valores por defecto */ }
+  return { enabled: c.enabled !== false, day: Number.isInteger(c.day) && c.day >= 1 && c.day <= 28 ? c.day : 1 };
+}
+
 function householdPayload(req) {
   const hid = req.hid;
   const isAdmin = RANK[req.role] >= RANK.admin;
   return {
-    household: { ...req.household, role: req.role },
+    household: { ...req.household, income_check: incomeCheck(req.household), role: req.role },
     members: all(
       `SELECT u.id, u.username, u.display_name, u.color, m.role, m.joined_at, COALESCE(json_extract(u.settings, '$.simple'), 0) AS simple,
               (SELECT photo_id FROM people p WHERE p.household_id = m.household_id AND p.user_id = u.id) AS photo_id
@@ -87,6 +96,17 @@ r.patch('/', atLeast('admin'), (req, res) => {
   if (cols.length) run(`UPDATE households SET ${cols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`, ...cols.map((c) => data[c]), req.hid);
   Object.assign(req.household, data);
   changed(req, 'household', 'update', req.hid, `${req.user.display_name} ha cambiado los ajustes del hogar`);
+  res.json(householdPayload(req));
+});
+
+// Nóminas que cambian: si se pregunta cada mes su importe y desde qué día.
+r.patch('/income-check', atLeast('admin'), (req, res) => {
+  const d = validate(req.body, { enabled: [v.bool(), 'Preguntar cada mes'], day: [v.int({ min: 1, max: 28 }), 'Día'] }, { partial: true });
+  const cur = incomeCheck(req.household);
+  const next = { enabled: d.enabled === undefined ? cur.enabled : !!d.enabled, day: d.day ?? cur.day };
+  req.household.income_check = JSON.stringify(next);
+  run('UPDATE households SET income_check = ? WHERE id = ?', req.household.income_check, req.hid);
+  changed(req, 'household', 'update', req.hid, `${req.user.display_name} ha cambiado cuándo se preguntan las nóminas`);
   res.json(householdPayload(req));
 });
 

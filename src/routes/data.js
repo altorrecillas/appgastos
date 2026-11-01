@@ -16,7 +16,7 @@ r.get('/export.json', (req, res) => {
     format: FORMAT,
     version: 1,
     exported_at: new Date().toISOString(),
-    household: one('SELECT name, icon, color, currency, monthly_budget, power FROM households WHERE id = ?', hid),
+    household: one('SELECT name, icon, color, currency, monthly_budget, power, income_check FROM households WHERE id = ?', hid),
     people: q('people'),
     categories: q('categories'),
     pets: q('pets'),
@@ -135,6 +135,9 @@ r.post('/import.json', atLeast('admin'), (req, res) => {
     }
     if (d.household?.power && one('SELECT power FROM households WHERE id = ?', hid).power === '{}') {
       run('UPDATE households SET power = ? WHERE id = ?', d.household.power, hid);
+    }
+    if (d.household?.income_check && one('SELECT income_check FROM households WHERE id = ?', hid).income_check === '{}') {
+      run('UPDATE households SET income_check = ? WHERE id = ?', d.household.income_check, hid);
     }
     // Reglas de categorías: las del hogar mandan si ya tenía una para el mismo comercio.
     for (const x of d.category_rules || []) {

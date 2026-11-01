@@ -12,7 +12,10 @@ cd "$SRC_DIR"
 
 # Este contenedor solo descarga: cualquier «git push» desde aquí falla (los datos nunca van a GitHub).
 git config remote.origin.pushurl no-push
+# Versión de un package.json («0.44.0» se enseña como «0.44»).
+ver() { sed -n 's/^  "version": "\([^"]*\)".*/\1/p' | head -1 | sed 's/\.0$//'; }
 BEFORE="$(git rev-parse HEAD)"
+OLD_V="$(git show "$BEFORE:package.json" 2>/dev/null | ver)"
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "No se ha podido actualizar: hay cambios hechos a mano en $SRC_DIR (míralos con «git status»)."
   exit 1
@@ -27,7 +30,11 @@ if [ "$BEFORE" = "$AFTER" ] && [ "${1:-}" != "--forzar" ]; then
   echo "Ya tienes la última versión ($(git log -1 --date=short --format='%cd, %h'))."
   exit 0
 fi
-if [ "$BEFORE" != "$AFTER" ]; then
+NEW_V="$(ver < package.json)"
+if [ -n "$OLD_V" ] && [ "$OLD_V" != "$NEW_V" ] && [ -f CHANGELOG.md ]; then
+  echo "Versión $OLD_V → $NEW_V. Novedades:"
+  awk -v old="## $OLD_V " 'index($0, old) == 1 { exit } /^## / { print "  " substr($0, 4); next } /^- / { print "    •" substr($0, 2) }' CHANGELOG.md
+elif [ "$BEFORE" != "$AFTER" ]; then
   echo "Novedades:"
   git log --no-merges --format='  • %s' "$BEFORE..$AFTER" | head -20
 fi

@@ -1,6 +1,6 @@
 // Service worker: la interfaz se abre al instante y funciona sin conexión.
 // Los datos (API) van siempre a la red; si no hay, se muestran los últimos que se vieron en este dispositivo.
-const VERSION = 'gastosbyath-v18';
+const VERSION = 'gastosbyath-dev'; // el servidor pone aquí la versión de la app (package.json) al servirlo
 const API_CACHE = 'gastosbyath-api';
 const VENDOR_CACHE = 'gastosbyath-vendor-1'; // cambiar el número al actualizar las librerías de /vendor
 const SHELL = [

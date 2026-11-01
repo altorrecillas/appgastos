@@ -1,8 +1,8 @@
 // Inicio: el mes en casa de un vistazo.
 import { get, post } from '../api.js';
 import {
-  $, compactMoney, fmtDateLong, html, icon, initials, money, moneyParts, monthLabel, monthLabelFull, monthShort, on, parseDate,
-  pct, plural, shiftMonth, thisMonth, timeAgo, toast, toastError, today, withBusy,
+  $, amountStr, compactMoney, fmtDate, fmtDateLong, html, icon, initials, money, moneyParts, monthLabel, monthLabelFull, monthShort, on,
+  parseAmount, parseDate, pct, plural, shiftMonth, thisMonth, timeAgo, toast, toastError, today, withBusy,
 } from '../ui.js';
 import { can, loadHouse, store } from '../store.js';
 import { catAxis, grid, mountChart, tipBox, tipHTML, valAxis } from '../charts.js';
@@ -46,6 +46,7 @@ export default async function dashboard(ctx) {
     const d = data;
     const empty = !d.trend.some((m) => m.expense || m.income) && !d.recent.length;
     ctx.el.innerHTML = String(html`<div class="dash stack" style="gap:18px">
+      ${incomeAsk(d)}
       ${hero(d)}
       ${can('edit') ? html`<div class="quick-row quick-tiles only-mobile" aria-label="Atajos">
         <button class="qa-tile" data-qa="ticket" style="--qc:var(--cobalt)"><span class="qi">${icon('camera')}</span>Ticket</button>
@@ -220,6 +221,70 @@ export default async function dashboard(ctx) {
   }
 
   // ---------- Avisos que se adelantan ----------
+  // Nóminas que cambian: «¿la de este mes es igual que la anterior?» (una fila por nómina; «Más tarde» la esconde hasta mañana).
+  const laterKey = `gastosbyath.nominas.${store.house.household.id}`;
+  const askedLater = () => {
+    try {
+      return localStorage.getItem(laterKey) === today();
+    } catch {
+      return false;
+    }
+  };
+  function incomeAsk(d) {
+    const qs = d.income_questions || [];
+    if (!qs.length || !can('edit') || askedLater()) return '';
+    const name = monthLabelFull(month).split(' ')[0].toLowerCase();
+    return html`<section class="pay-ask" aria-label="Nóminas de este mes">
+      <div class="pa-head"><span class="pa-ico">${icon('hand-coins')}</span>
+        <div class="grow"><h2>${qs.length > 1 ? `Las nóminas de ${name}` : `La nómina de ${name}`}</h2>
+          <p>¿Es igual que la anterior? Con la cantidad buena, la previsión del mes acierta.</p></div>
+        <button type="button" class="btn ghost sm" data-act="ask-later">Más tarde</button></div>
+      ${qs.map((q) => {
+        const prev = q.previous ? q.previous.amount : q.amount;
+        return html`<div class="pa-item">
+          <div class="pa-who"><b>${q.name}${q.person_name && !q.name.includes(q.person_name) ? ` de ${q.person_name}` : ''}</b>
+            <small>${q.previous ? `La anterior: ${money(q.previous.amount)}, el ${fmtDate(q.previous.date)}` : `Prevista: ${money(q.amount)}`}</small></div>
+          <div class="pa-actions">
+            <button type="button" class="btn sm" data-same="${q.id}" data-amount="${prev}">${icon('check', 'sm')}Igual</button>
+            <button type="button" class="btn sm ghost" data-diff="${q.id}">Es diferente</button></div>
+          <form class="pa-form" data-diffform="${q.id}" hidden>
+            <div class="input-group"><input class="input" inputmode="decimal" name="amount" placeholder="${amountStr(prev)}" aria-label="Importe de ${q.name} este mes" style="padding-left:13px"><span class="suffix">€</span></div>
+            <button type="submit" class="btn sm primary">Guardar</button></form>
+        </div>`;
+      })}
+      <a class="pa-add" href="#/fijos?new=1&kind=income&name=N%C3%B3mina&variable=1">${icon('plus', 'sm')}Añadir la nómina de otra persona</a>
+    </section>`;
+  }
+  const answerIncome = (id, amount, btn) => withBusy(btn, async () => {
+    try {
+      await post(`/recurring/${id}/month-amount`, { amount });
+      toast(`Guardado: ${money(amount)} este mes. La previsión ya lo tiene en cuenta.`);
+      notifyChange('recurring');
+      await load();
+    } catch (err) {
+      toastError(err);
+    }
+  });
+  on(ctx.el, 'click', '[data-same]', (e, b) => answerIncome(Number(b.dataset.same), Number(b.dataset.amount), b));
+  on(ctx.el, 'click', '[data-diff]', (e, b) => {
+    const f = $(`[data-diffform="${b.dataset.diff}"]`, ctx.el);
+    f.hidden = false;
+    b.hidden = true;
+    $('input', f).focus();
+  });
+  on(ctx.el, 'submit', '[data-diffform]', (e, f) => {
+    e.preventDefault();
+    const amount = parseAmount($('input', f).value);
+    if (!(amount > 0)) return toastError(new Error('Escribe cuánto es este mes'));
+    answerIncome(Number(f.dataset.diffform), amount, $('button', f));
+  });
+  on(ctx.el, 'click', '[data-act=ask-later]', () => {
+    try {
+      localStorage.setItem(laterKey, today());
+    } catch { /* sin almacenamiento: vuelve a salir al recargar */ }
+    $('.pay-ask', ctx.el)?.remove();
+  });
+
   function insightsPanel() {
     if (!insights.length) return html`<div class="insights-slot"></div>`;
     return html`<section class="panel insights-panel insights-slot"><div class="panel-head"><h2>Para que lo sepas</h2>

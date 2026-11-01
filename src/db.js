@@ -583,6 +583,12 @@ const migrations = [
   -- Imágenes de una nota privada: solo las puede abrir quien las subió.
   ALTER TABLE attachments ADD COLUMN owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
   `,
+
+  // v10 — nóminas que cambian: preguntar cada mes su importe (ajuste del hogar) y de qué mes es el importe confirmado
+  `
+  ALTER TABLE households ADD COLUMN income_check TEXT NOT NULL DEFAULT '{}';
+  ALTER TABLE recurring ADD COLUMN amount_month TEXT;
+  `,
 ];
 
 const current = db.pragma('user_version', { simple: true });

@@ -1,6 +1,6 @@
 {
   "name": "gastosbyath",
-  "version": "1.0.0",
+  "version": "0.44.0",
   "description": "GastosbyATH — gestión de gastos, facturas, pagos fijos, compra y mascotas para el hogar",
   "private": true,
   "type": "module",
@@ -14,7 +14,8 @@
     "test": "node tests/run.js",
     "test:unit": "node tests/run.js unit",
     "test:api": "node tests/run.js api",
-    "test:e2e": "node tests/run.js e2e"
+    "test:e2e": "node tests/run.js e2e",
+    "subir-version": "node scripts/version.js"
   },
   "engines": {
     "node": ">=20"

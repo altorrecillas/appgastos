@@ -1,6 +1,7 @@
 // GastosbyATH — servidor de la aplicación de gastos del hogar.
 import express from 'express';
 import compression from 'compression';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { all, db } from './src/db.js';
@@ -28,6 +29,7 @@ import setupRoutes from './src/routes/setup.js';
 import { haScheduler } from './src/ha.js';
 import { ensurePrices, powerSettings, syncBaseDays } from './src/power.js';
 import { addDays, today } from './src/util.js';
+import { VERSION, changelog } from './src/version.js';
 import pushRoutes from './src/routes/push.js';
 import { pushDigest } from './src/push.js';
 
@@ -64,7 +66,8 @@ app.use('/api', (req, res, next) => {
 });
 app.use('/api', loadUser, csrfGuard);
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, version: process.env.npm_package_version || '1.0.0' }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, version: VERSION }));
+app.get('/api/changelog', (_req, res) => res.json({ version: VERSION, versions: changelog() }));
 app.use('/api/auth', authRoutes);
 app.use('/api/households', requireAuth, householdsRouter);
 app.use('/api/push', requireAuth, pushRoutes);
@@ -92,21 +95,32 @@ app.use('/api/h/:hid', requireAuth, householdAccess, h);
 
 app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Ruta no encontrada')));
 
-// Archivos estáticos: los recursos con versión en la URL se cachean mucho tiempo.
 const PUBLIC = path.join(ROOT, 'public');
+// La página y el service worker llevan la versión de la app: al subirla, el móvil instala el service worker nuevo
+// (cambia su contenido) y la app compara su versión con la del servidor para avisar de que hay una nueva.
+const versioned = (file, find, put) => fs.readFileSync(path.join(PUBLIC, file), 'utf8').replace(find, put);
+const sendIndex = (_req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.type('html').send(versioned('index.html', '</head>', `  <meta name="app-version" content="${VERSION}">\n</head>`));
+};
+app.get(['/', '/index.html'], sendIndex);
+app.get('/sw.js', (_req, res) => {
+  res.set({ 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' });
+  res.type('js').send(versioned('sw.js', /const VERSION = '[^']*';/, `const VERSION = 'gastosbyath-${VERSION}';`));
+});
+
+// Archivos estáticos: los recursos con versión en la URL se cachean mucho tiempo.
 app.use(express.static(PUBLIC, {
   index: false,
   setHeaders(res, file) {
     if (/[\\/](vendor|fonts|icons)[\\/]/.test(file)) res.set('Cache-Control', 'public, max-age=31536000, immutable');
     else res.set('Cache-Control', 'no-cache');
-    if (file.endsWith('sw.js')) res.set('Service-Worker-Allowed', '/');
   },
 }));
 // Aplicación de una sola página: cualquier otra ruta devuelve index.html.
 app.use((req, res, next) => {
   if (req.method !== 'GET' || req.path.startsWith('/api')) return next();
-  res.set('Cache-Control', 'no-cache');
-  res.sendFile(path.join(PUBLIC, 'index.html'));
+  sendIndex(req, res);
 });
 
 // Errores → JSON con un mensaje entendible.

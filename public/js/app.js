@@ -12,6 +12,45 @@ import { applyTint, reapplyTint } from './tint.js';
 import { avatar } from './photo.js';
 import { applyPrefs, isSimple } from './prefs.js';
 
+// Versión de esta página (la pone el servidor): se enseña en Ajustes y sirve para avisar cuando hay una nueva.
+export const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '';
+
+// Instalar como app: cuando se puede, Chrome lo anuncia con «beforeinstallprompt»; se guarda para el botón de Ajustes.
+let installEvent = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  installEvent = e;
+});
+window.addEventListener('appinstalled', () => {
+  installEvent = null;
+  toast(`${NAME} instalada: ya la tienes con el resto de aplicaciones.`);
+});
+export const installInfo = () => ({
+  installed: matchMedia('(display-mode: standalone)').matches || navigator.standalone === true,
+  secure: window.isSecureContext,
+  canPrompt: !!installEvent,
+  ios: /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+});
+export async function promptInstall() {
+  const e = installEvent;
+  if (!e) return null;
+  installEvent = null;
+  await e.prompt();
+  return (await e.userChoice).outcome;
+}
+
+// Versión nueva en el servidor (por ejemplo, después de actualizar el contenedor): se avisa una vez para recargar.
+let newerSeen = '';
+async function checkForUpdate() {
+  if (!APP_VERSION || document.hidden || !navigator.onLine) return;
+  try {
+    const { version } = await (await fetch('/api/health', { cache: 'no-store' })).json();
+    if (!version || version === APP_VERSION || version === newerSeen) return;
+    newerSeen = version;
+    navigator.serviceWorker?.getRegistration().then((r) => r?.update()).catch(() => {});
+    toast(`Hay una versión nueva de ${NAME}: la ${version}`, { iconName: 'sparkles', timeout: 20000, action: { label: 'Actualizar', fn: () => location.reload() } });
+  } catch { /* sin conexión: se mirará la próxima vez */ }
+}
+
 const ROUTES = {
   inicio: { load: () => import('./views/dashboard.js'), title: 'Inicio' },
   movimientos: { load: () => import('./views/transactions.js'), title: 'Movimientos' },
@@ -79,6 +118,8 @@ async function boot() {
     // En cuanto el service worker controla la página se guarda lo necesario para abrirla sin conexión.
     navigator.serviceWorker.addEventListener('controllerchange', warmOfflineCache);
   }
+  document.addEventListener('visibilitychange', checkForUpdate);
+  setInterval(checkForUpdate, 30 * 60e3);
   onUnauthorized(() => {
     if (store.me) {
       store.me = null;
@@ -365,7 +406,8 @@ function moreSheet() {
         ${prefsControls()}
       </section>
       <button type="button" class="btn ghost danger block" data-act="logout">${icon('log-out')}Cerrar sesión</button>
-      <div class="brand-foot">${LOGO}${WORDMARK}<span>${TAGLINE}</span></div>
+      <div class="brand-foot">${LOGO}${WORDMARK}<span>${TAGLINE}</span>
+        ${APP_VERSION ? html`<a class="bf-ver" href="#/ajustes/app" data-close>Versión ${APP_VERSION}</a>` : ''}</div>
     </div>`,
   });
   on(s.el, 'click', '[data-theme-pick] [data-v]', (e, b) => {
