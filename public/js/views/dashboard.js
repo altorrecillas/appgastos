@@ -5,11 +5,12 @@ import {
   parseAmount, parseDate, pct, plural, shiftMonth, thisMonth, timeAgo, toast, toastError, today, withBusy,
 } from '../ui.js';
 import { can, loadHouse, store } from '../store.js';
-import { catAxis, grid, mountChart, tipBox, tipHTML, valAxis } from '../charts.js';
+import { catAxis, disposeCharts, grid, mountChart, tipBox, tipHTML, valAxis } from '../charts.js';
 import { notifyChange, openTxForm, pendingTxRows, pickTicket, txRow } from '../forms.js';
 import { payBill, payRecurring, quickShopping } from '../actions.js';
 import { bindInsights, insightCards } from '../insights.js';
 import { isSimple } from '../prefs.js';
+import { blockOf, editHome, homeLayout } from '../home.js';
 
 export default async function dashboard(ctx) {
   // Vista sencilla: un inicio con lo esencial en grande.
@@ -17,9 +18,16 @@ export default async function dashboard(ctx) {
   let month = /^\d{4}-\d{2}$/.test(ctx.query.month || '') ? ctx.query.month : thisMonth();
   const hour = new Date().getHours();
   const hello = hour < 6 ? 'Buenas noches' : hour < 14 ? 'Buenos días' : hour < 21 ? 'Buenas tardes' : 'Buenas noches';
-  ctx.setHeader(`${hello}, ${store.me.display_name.split(' ')[0]}`, fmtDateLong(today()));
+  const header = () => ctx.setHeader(`${hello}, ${store.me.display_name.split(' ')[0]}`, fmtDateLong(today()));
+  header();
 
   let data = null;
+  let editing = false; // «Personalizar el inicio» abierto: los datos se siguen cargando, pero no se pinta encima
+  // En el ordenador, los bloques van en dos columnas; en el móvil, uno debajo de otro en el orden de cada persona.
+  const twoCols = window.matchMedia('(min-width: 981px)');
+  const relayout = () => data && !editing && ctx.isCurrent() && draw();
+  twoCols.addEventListener('change', relayout);
+  ctx.onCleanup(() => twoCols.removeEventListener('change', relayout));
   let shownSpent = 0; // lo que enseñaba el héroe: el importe «cuenta» desde ahí hasta el nuevo
   let showAllCats = false;
   let insights = [];
@@ -33,7 +41,7 @@ export default async function dashboard(ctx) {
         get(`/stats/dashboard?month=${month}`),
         month === thisMonth() ? get('/stats/insights').catch(() => []) : [],
       ]);
-      if (!ctx.isCurrent()) return;
+      if (!ctx.isCurrent() || editing) return;
       draw();
       tweenAmount(shownSpent, data.totals.expense);
       shownSpent = data.totals.expense;
@@ -42,50 +50,124 @@ export default async function dashboard(ctx) {
     }
   }
 
+  // Cada bloque del inicio (home.js); '' si ahora no tiene nada que enseñar.
+  function block(id, d) {
+    switch (id) {
+      case 'hero': return hero(d);
+      case 'quick': return quickTiles();
+      case 'insights': return insightsPanel();
+      case 'stats': return stats(d);
+      case 'categories': return categoriesPanel(d);
+      case 'trend': return trendPanel();
+      case 'recent': return recentPanel(d);
+      case 'power': return d.power ? powerPanel(d.power) : '';
+      case 'upcoming': return upcomingPanel(d);
+      case 'installments': return d.installments.count ? installmentsPanel(d) : '';
+      case 'lists': return d.lists.length ? listsPanel(d) : '';
+      case 'goals': return d.goals.length ? goalsPanel(d) : '';
+      case 'activity': return activityPanel(d);
+      default: return '';
+    }
+  }
+  const hasContent = (id) => ({
+    quick: can('edit'), insights: insights.length > 0, power: !!data.power, installments: data.installments.count > 0,
+    lists: data.lists.length > 0, goals: data.goals.length > 0,
+  })[id] ?? true;
+
   function draw() {
     const d = data;
     const empty = !d.trend.some((m) => m.expense || m.income) && !d.recent.length;
+    const { order, hidden } = homeLayout();
+    const visible = order.filter((id) => !hidden.has(id));
+    // Lo del momento (el resumen del mes pasado, los primeros pasos) va debajo del resumen y los atajos, o arriba.
+    let anchor = visible.indexOf('hero');
+    if (anchor >= 0 && visible[anchor + 1] === 'quick') anchor++;
+    const extras = html`${recapBanner()}${empty ? onboarding() : ''}`;
+    const parts = anchor < 0 ? [extras] : [];
+    // En el ordenador, los paneles seguidos se reparten en sus dos columnas (en el orden de cada persona dentro de
+    // cada una); lo ancho (el resumen, las cifras…) corta y va a todo el ancho.
+    let cols = null;
+    const flush = () => {
+      if (!cols) return;
+      if (cols.main.length && cols.side.length) {
+        parts.push(html`<div class="grid cols-main"><div class="stack" style="gap:18px">${cols.main}</div><div class="stack" style="gap:18px">${cols.side}</div></div>`);
+      } else parts.push(...cols.main, ...cols.side);
+      cols = null;
+    };
+    visible.forEach((id, i) => {
+      const content = block(id, d);
+      // Envoltorio sin caja propia (display: contents): no cambia la maquetación y marca qué bloque es cada cosa.
+      const out = content && html`<div class="home-block" data-home="${id}">${content}</div>`;
+      if (out) {
+        if (!twoCols.matches || blockOf(id).wide) {
+          flush();
+          parts.push(out);
+        } else (cols ||= { main: [], side: [] })[blockOf(id).col].push(out);
+      }
+      if (i === anchor) {
+        flush();
+        parts.push(extras);
+      }
+    });
+    flush();
     ctx.el.innerHTML = String(html`<div class="dash stack" style="gap:18px">
       ${incomeAsk(d)}
-      ${hero(d)}
-      ${can('edit') ? html`<div class="quick-row quick-tiles only-mobile" aria-label="Atajos">
-        <button class="qa-tile" data-qa="ticket" style="--qc:var(--cobalt)"><span class="qi">${icon('camera')}</span>Ticket</button>
-        <button class="qa-tile" data-qa="income" style="--qc:var(--pine)"><span class="qi">${icon('arrow-down-right')}</span>Ingreso</button>
-        <button class="qa-tile" data-qa="shop" style="--qc:var(--chart-4)"><span class="qi">${icon('shopping-cart')}</span>A la compra</button>
-        <button class="qa-tile" data-act="quick" style="--qc:var(--chart-7)"><span class="qi">${icon('grid-2x2')}</span>Más</button></div>` : ''}
-      ${Number(today().slice(8)) <= 7 && month === thisMonth() ? html`<a class="recap-banner" href="#/resumen?m=${shiftMonth(month, -1)}">
-        <span class="rb-ico">${icon('sparkles')}</span><span class="grow"><b>Ya está vuestro resumen de ${monthLabelFull(shiftMonth(month, -1)).split(' ')[0].toLowerCase()}</b>
-        <small>Lo que entró, lo que salió y en qué. Con imagen para compartir.</small></span>${icon('chevron-right')}</a>` : ''}
-      ${insightsPanel()}
-      ${empty ? onboarding() : ''}
-      ${stats(d)}
-      <div class="grid cols-main">
-        <div class="stack" style="gap:18px">
-          ${categoriesPanel(d)}
-          <section class="panel"><div class="panel-head"><h2>Últimos 12 meses</h2>
-            <div class="actions"><div class="chart-legend" style="margin:0">
-              <span><i style="--c:var(--chart-1)"></i>Gastos</span><span><i style="--c:var(--chart-2)"></i>Ingresos</span></div></div></div>
-            <div class="chart" id="trend" role="img" aria-label="Gastos e ingresos de los últimos 12 meses"></div>
-            <p class="tiny muted" style="margin-top:6px">Toca una barra para ver ese mes.</p>
-          </section>
-          <section class="panel"><div class="panel-head"><h2>Últimos movimientos</h2>
-            <div class="actions"><a class="btn ghost sm" href="#/movimientos">Ver todos</a></div></div>
-            ${pendingTxRows(store.hid)}
-            ${d.recent.length ? html`<div class="rows">${d.recent.map((t) => txRow(t, { showDate: true }))}</div>`
-              : html`<div class="empty" style="padding:20px"><p>Aún no hay movimientos.</p></div>`}
-          </section>
-        </div>
-        <div class="stack" style="gap:18px">
-          ${d.power ? powerPanel(d.power) : ''}
-          ${upcomingPanel(d)}
-          ${d.installments.count ? installmentsPanel(d) : ''}
-          ${d.lists.length ? listsPanel(d) : ''}
-          ${d.goals.length ? goalsPanel(d) : ''}
-          ${activityPanel(d)}
-        </div>
-      </div>
+      ${parts}
+      ${!visible.length ? html`<div class="empty"><div class="art">🙈</div><h3>Has ocultado todo el inicio</h3>
+        <p>Elige qué quieres ver en «Personalizar el inicio».</p></div>` : ''}
+      <div class="home-custom"><button type="button" class="btn ghost" data-act="customize">${icon('sliders-horizontal')}Personalizar el inicio</button></div>
     </div>`);
     drawCharts();
+  }
+
+  // «Personalizar el inicio»: el orden y lo que se ve, de cada persona.
+  function customize() {
+    if (editing || !data) return;
+    editing = true;
+    editHome(ctx, {
+      has: hasContent,
+      done: () => {
+        editing = false;
+        header();
+        draw();
+        window.scrollTo({ top: 0 });
+      },
+    });
+    disposeCharts(ctx.el);
+    window.scrollTo({ top: 0 });
+  }
+  on(ctx.el, 'click', '[data-act=customize]', customize);
+
+  function quickTiles() {
+    if (!can('edit')) return '';
+    return html`<div class="quick-row quick-tiles only-mobile" aria-label="Atajos">
+      <button class="qa-tile" data-qa="ticket" style="--qc:var(--cobalt)"><span class="qi">${icon('camera')}</span>Ticket</button>
+      <button class="qa-tile" data-qa="income" style="--qc:var(--pine)"><span class="qi">${icon('arrow-down-right')}</span>Ingreso</button>
+      <button class="qa-tile" data-qa="shop" style="--qc:var(--chart-4)"><span class="qi">${icon('shopping-cart')}</span>A la compra</button>
+      <button class="qa-tile" data-act="quick" style="--qc:var(--chart-7)"><span class="qi">${icon('grid-2x2')}</span>Más</button></div>`;
+  }
+  // La primera semana del mes, el resumen del anterior.
+  function recapBanner() {
+    if (!(Number(today().slice(8)) <= 7 && month === thisMonth())) return '';
+    return html`<a class="recap-banner" href="#/resumen?m=${shiftMonth(month, -1)}">
+      <span class="rb-ico">${icon('sparkles')}</span><span class="grow"><b>Ya está vuestro resumen de ${monthLabelFull(shiftMonth(month, -1)).split(' ')[0].toLowerCase()}</b>
+      <small>Lo que entró, lo que salió y en qué. Con imagen para compartir.</small></span>${icon('chevron-right')}</a>`;
+  }
+  function trendPanel() {
+    return html`<section class="panel"><div class="panel-head"><h2>Últimos 12 meses</h2>
+      <div class="actions"><div class="chart-legend" style="margin:0">
+        <span><i style="--c:var(--chart-1)"></i>Gastos</span><span><i style="--c:var(--chart-2)"></i>Ingresos</span></div></div></div>
+      <div class="chart" id="trend" role="img" aria-label="Gastos e ingresos de los últimos 12 meses"></div>
+      <p class="tiny muted" style="margin-top:6px">Toca una barra para ver ese mes.</p>
+    </section>`;
+  }
+  function recentPanel(d) {
+    return html`<section class="panel"><div class="panel-head"><h2>Últimos movimientos</h2>
+      <div class="actions"><a class="btn ghost sm" href="#/movimientos">Ver todos</a></div></div>
+      ${pendingTxRows(store.hid)}
+      ${d.recent.length ? html`<div class="rows">${d.recent.map((t) => txRow(t, { showDate: true }))}</div>`
+        : html`<div class="empty" style="padding:20px"><p>Aún no hay movimientos.</p></div>`}
+    </section>`;
   }
 
   // El gasto del mes sube (o baja) contando hasta su valor: al abrir la app, al cambiar de mes o al llegar un gasto nuevo.
@@ -627,6 +709,11 @@ export default async function dashboard(ctx) {
   ctx.setRefresh(load);
   ctx.el.innerHTML = '<div class="hero skeleton" style="height:340px;background:var(--hero-bg);opacity:.9"></div>';
   await load();
+  // Desde «Cómo se ve» (menú Más o Ajustes): se abre directamente «Personalizar el inicio».
+  if (ctx.query.editar && ctx.isCurrent()) {
+    history.replaceState(null, '', '#/inicio');
+    customize();
+  }
   // Hogar recién creado (o casi vacío) y sin preparar: se ofrece el asistente una vez por sesión.
   const h = store.house.household;
   const seenKey = `gastosbyath.setup.${h.id}`;

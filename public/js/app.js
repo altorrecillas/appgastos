@@ -463,7 +463,8 @@ export function prefsControls() {
   return html`<div class="field"><label>Tamaño del texto</label><div class="segmented block" data-text-pick>
       ${[['normal', 'Normal'], ['large', 'Grande'], ['xlarge', 'Muy grande']].map(([v, l]) => html`<button type="button" data-v="${v}" aria-pressed="${(st.text || 'normal') === v}">${l}</button>`)}</div></div>
     <label class="switch"><input type="checkbox" data-simple-pick ${st.simple ? 'checked' : ''}><span class="track"></span>
-      <span class="txt">Vista sencilla<small>Botones grandes y solo lo esencial: anotar, la compra y lo que llevamos gastado.</small></span></label>`;
+      <span class="txt">Vista sencilla<small>Botones grandes y solo lo esencial: anotar, la compra y lo que llevamos gastado.</small></span></label>
+    ${st.simple ? '' : html`<a class="btn block" href="#/inicio?editar=1" data-close>${icon('sliders-horizontal')}Personalizar el inicio</a>`}`;
 }
 export function bindPrefsControls(root, after) {
   on(root, 'click', '[data-text-pick] [data-v]', (e, b) => {
@@ -1000,9 +1001,11 @@ document.addEventListener('visibilitychange', () => {
 // Al volver a la app se comprueba si alguien ha cambiado cómo la ves (por si no llegó el aviso en directo).
 async function syncPrefs() {
   try {
-    const before = JSON.stringify([!!store.me.settings?.simple, store.me.settings?.text || 'normal']);
+    // También el orden del inicio, por si se cambió en otro dispositivo.
+    const look = (st) => JSON.stringify([!!st?.simple, st?.text || 'normal', st?.home || null]);
+    const before = look(store.me.settings);
     const payload = await api('/auth/me');
-    const after = JSON.stringify([!!payload.user.settings?.simple, payload.user.settings?.text || 'normal']);
+    const after = look(payload.user.settings);
     if (before === after) return;
     setSession(payload);
     applyPrefs(store.me.settings);

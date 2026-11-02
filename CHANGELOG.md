@@ -3,6 +3,12 @@
 Cada mejora sube la versión (`npm run subir-version -- "Novedad" …`). La app la enseña en *Ajustes → Aplicación*
 y avisa en los móviles cuando hay una nueva.
 
+## 0.50 — 2026-11-02
+
+- El inicio, a gusto de cada persona: con «Personalizar el inicio» (al final del inicio, o en Más → Cómo se ve) se cambia el orden de todo lo que sale (el resumen del mes, las cifras, en qué se va el dinero, los próximos pagos, la lista de la compra…) y se ocultan los bloques que no se usan.
+- Se mueve arrastrando cada bloque por su asa o con las flechas de subir y bajar. Lo que se oculta no se borra, y «Volver al orden de siempre» lo deja como venía.
+- Cada persona tiene el suyo: se guarda en su cuenta y la sigue en el móvil y en el ordenador, sin cambiar el inicio de los demás de la casa.
+
 ## 0.49 — 2026-11-01
 
 - Presupuestos por categoría: un límite de Restaurantes (o de lo que sea) ya no se convierte en el presupuesto de todo el mes. En el inicio sale ese límite con lo gastado en esa categoría («Restaurantes: 150 € de 200 €»), en vez de dar el mes por superado por la compra o el alquiler.

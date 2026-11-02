@@ -1460,6 +1460,40 @@ dialog.sheet[open] { display: flex; align-items: center; justify-content: center
 .day-group .rows .rowi { padding: 11px 14px; }
 .panel.flush .sw .rowi { padding-left: 18px; padding-right: 18px; }
 
+/* Personalizar el inicio: el orden y lo que se ve, de cada persona */
+.home-block { display: contents; }
+.home-custom { display: flex; justify-content: center; padding-top: 4px; }
+.home-edit { max-width: 760px; }
+.he-title { font-size: calc(24px * var(--fs)); font-weight: 720; font-stretch: 84%; letter-spacing: -0.01em; margin-bottom: 6px; }
+.he-intro { color: var(--ink-2); font-size: calc(14px * var(--fs)); line-height: 1.5; margin-bottom: 16px; max-width: 62ch; }
+.he-intro .icon { vertical-align: -3px; color: var(--ink-3); }
+.he-list { display: flex; flex-direction: column; gap: 8px; }
+.he-row {
+  display: grid; grid-template-columns: 36px 40px minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
+  padding: 8px 14px 8px 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+}
+.he-ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--cobalt-soft); color: var(--cobalt); }
+.he-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.he-txt b { font-weight: 650; }
+.he-txt small { color: var(--ink-3); font-size: calc(12.5px * var(--fs)); line-height: 1.35; }
+.he-move { display: flex; gap: 2px; }
+.he-row.off { background: var(--surface-2); border-style: dashed; }
+.he-row.off .he-ico { background: var(--surface-3); color: var(--ink-3); }
+.he-row.off .he-txt b { color: var(--ink-3); }
+.he-row.dragging { box-shadow: var(--shadow-pop); opacity: 0.97; }
+.he-row.moved { animation: he-moved 0.6s var(--ease); }
+@keyframes he-moved { from { background: var(--cobalt-soft); border-color: var(--cobalt-line); } }
+.he-foot { display: flex; justify-content: center; margin-top: 16px; }
+@media (max-width: 640px) {
+  /* Filas bajas para arrastrar con comodidad: sin icono, cada texto en una línea y las flechas una encima de otra. */
+  .he-row { grid-template-columns: 30px minmax(0, 1fr) auto auto; gap: 8px; padding: 4px 10px 4px 2px; }
+  .he-ico { display: none; }
+  .he-txt b, .he-txt small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .he-move { flex-direction: column; gap: 0; }
+  .he-move .btn { width: 30px; height: 26px; }
+  .he-row [data-grip] { width: 30px; }
+}
+
 /* Arrastrar para ordenar */
 [data-grip] {
   display: grid; place-items: center; width: 36px; height: 44px; flex: none; color: var(--ink-3); cursor: grab; touch-action: none;
