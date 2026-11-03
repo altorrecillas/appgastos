@@ -45,6 +45,13 @@ test('el resumen cuenta notas, tareas pendientes y hechas', async () => {
   assert.deepEqual([counts.total, counts.notes, counts.todo, counts.done], [5, 2, 2, 1]);
 });
 
+test('cada cuaderno cuenta sus notas y sus tareas pendientes por separado', async () => {
+  const { books } = await ana.ok('GET', `${H}/meta`);
+  const of = (id) => books.find((b) => b.id === id);
+  assert.deepEqual([of(shared.id).notes, of(shared.id).todo, of(shared.id).n], [1, 1, 3], 'la hecha no cuenta como pendiente');
+  assert.deepEqual([of(mine.id).notes, of(mine.id).todo], [1, 1]);
+});
+
 test('el servidor no ha registrado errores', () => {
   assert.deepEqual(srv.errors(), []);
 });

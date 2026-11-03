@@ -1,6 +1,6 @@
 {
   "name": "gastosbyath",
-  "version": "0.51.0",
+  "version": "0.52.0",
   "description": "GastosbyATH — gestión de gastos, facturas, pagos fijos, compra y mascotas para el hogar",
   "private": true,
   "type": "module",

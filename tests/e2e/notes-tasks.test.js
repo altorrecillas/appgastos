@@ -19,6 +19,8 @@ describe('notas y tareas', { skip: SKIP }, () => {
   let shared;
   const pressed = () => p.$$eval('.nl-kind [data-kind]', (bs) => bs.map((b) => [b.dataset.kind, b.getAttribute('aria-pressed')]));
   const items = () => p.$$eval('.nl-list .nl-item .nl-title', (els) => els.map((e) => e.textContent.trim()));
+  // El nombre de cada cuaderno en los chips (sin su emoji).
+  const chips = () => p.$$eval('.nl-chips [data-book]', (els) => els.map((e) => [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim()));
 
   before(async () => {
     srv = await startServer();
@@ -48,6 +50,7 @@ describe('notas y tareas', { skip: SKIP }, () => {
     const [on, off] = await p.$$eval('.nl-kind [data-kind]', (bs) => bs.map((b) => getComputedStyle(b).backgroundColor));
     assert.notEqual(on, off, 'lo elegido se distingue (azul)');
     assert.equal(await p.getAttribute('.tabbar [data-act=add]', 'aria-label'), 'Nueva nota');
+    assert.deepEqual(await chips(), ['Notas de casa', 'Mis notas']);
     assert.equal(await p.isVisible('#page-actions [data-act=new-note]'), false, 'arriba ya no hay botones que parezcan pestañas');
     await p.click('.tabbar [data-act=add]');
     await p.waitForSelector('[data-title]');
@@ -68,6 +71,13 @@ describe('notas y tareas', { skip: SKIP }, () => {
       ['Más adelante', 'Renovar el DNI'], ['Sin fecha', 'Llamar al banco'],
     ]);
     assert.equal(await p.getAttribute('.tabbar [data-act=add]', 'aria-label'), 'Nueva tarea');
+  });
+
+  test('en Tareas, los cuadernos de siempre se leen «Tareas de casa» y «Mis tareas»', async () => {
+    assert.deepEqual(await chips(), ['Tareas de casa', 'Mis tareas']);
+    assert.match(await p.textContent('.nl-qhint'), /Se apunta en .*Mis tareas/);
+    assert.equal(await p.textContent('.nl-item:has-text("Pedir cita ITV") .nl-book'), 'Tareas de casa');
+    assert.match(await p.textContent('.nl-item:has-text("Tender la ropa") .nl-book'), /Mis tareas/);
   });
 
   test('se apunta una tarea sin abrir el editor y la casilla queda lista para otra', async () => {
@@ -103,7 +113,7 @@ describe('notas y tareas', { skip: SKIP }, () => {
 
   test('un cuaderno, dentro de Tareas: solo sus tareas', async () => {
     await p.click(`.nl-chips [data-book="${shared.id}"]`);
-    await p.waitForFunction(() => document.querySelector('.nl-head h2')?.textContent.includes('Notas de casa'));
+    await p.waitForFunction(() => document.querySelector('.nl-head h2')?.textContent.includes('Tareas de casa'));
     assert.deepEqual(await pressed(), [['notes', 'false'], ['todo', 'true']], 'sigue en Tareas');
     assert.deepEqual((await items()).sort(), ['Cambiar el filtro', 'Llamar al banco', 'Pedir cita ITV']);
     await p.click('.nl-chips [data-allbooks]');
@@ -124,9 +134,15 @@ describe('notas y tareas', { skip: SKIP }, () => {
     await d.page.click('[data-kind=notes]');
     await d.page.click('.nl-item:has-text("Wifi de casa") [data-note]');
     await d.page.waitForSelector('.ne-title');
+    // En el panel de cuadernos, cada uno con cuántas notas tiene…
+    const pane = () => d.page.$$eval('.nb-pane [data-book]', (els) => els.map((e) => [e.querySelector('.grow').textContent.trim(), e.querySelector('.n').textContent.trim()]));
+    assert.deepEqual(await pane(), [['Notas de casa', '1'], ['Mis notas', '']]);
     await d.page.click('[data-kind=todo]');
     await d.page.waitForSelector('.ne-todo');
     assert.equal(await d.page.$eval('.nl-item.on .nl-title', (e) => e.textContent.trim()), 'Cambiar el filtro');
+    // …y en Tareas, cuántas tiene pendientes (y con el nombre de tareas, también en el editor).
+    assert.deepEqual(await pane(), [['Tareas de casa', '3'], ['Mis tareas', '3']]);
+    assert.match(await d.page.textContent('.ne-book'), /Tareas de casa/);
     assert.deepEqual(d.errors, []);
     await d.ctx.close();
   });

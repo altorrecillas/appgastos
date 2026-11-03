@@ -3,6 +3,12 @@
 Cada mejora sube la versión (`npm run subir-version -- "Novedad" …`). La app la enseña en *Ajustes → Aplicación*
 y avisa en los móviles cuando hay una nueva.
 
+## 0.52 — 2026-11-03
+
+- En Tareas, los cuadernos de siempre se llaman «Tareas de casa» y «Mis tareas» (en los botones de cuadernos, debajo de cada tarea, al apuntar una y en el editor). En Notas siguen siendo «Notas de casa» y «Mis notas»: es el mismo cuaderno, solo cambia cómo se lee.
+- El número junto a cada cuaderno cuenta lo de la vista abierta: sus notas en Notas y sus tareas pendientes en Tareas (antes sumaba todo junto).
+- El buscador de Notas avisa de que busca en notas y en tareas.
+
 ## 0.51 — 2026-11-03
 
 - Notas: arriba de la lista hay un interruptor «Notas | Tareas» que marca en azul lo que estás viendo y cambia de verdad la lista: en Notas solo salen las notas y en Tareas solo las tareas. Los cuadernos y las etiquetas filtran dentro de cada una.

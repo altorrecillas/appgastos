@@ -23,6 +23,11 @@ const writePref = (p) => {
 };
 const SORTS = { updated: 'Última modificación', created: 'Fecha de creación', title: 'Título' };
 
+// Un cuaderno guarda notas y tareas: entre tareas, «Notas de casa» se lee «Tareas de casa» y «Mis notas», «Mis
+// tareas» (igual que cualquier otro que empiece así). Solo cambia lo que se enseña; el nombre guardado es el mismo.
+const tasksWord = (w) => (w === w.toUpperCase() ? 'TAREAS' : w[0] === 'N' ? 'Tareas' : 'tareas');
+const bookName = (name, todo) => (todo ? String(name).replace(/^(mis\s+)?(notas)\b/i, (m, mis = '', w) => mis + tasksWord(w)) : name);
+
 // Fecha límite de una tarea: «hoy», «mañana a las 10:30», «vencida»…
 function dueLabel(n) {
   if (!n.due_at) return null;
@@ -72,6 +77,8 @@ export default async function notesView(ctx) {
     <button class="btn desktop-only" data-act="new-todo">${icon('list-todo')}Nueva tarea</button>
     <button class="btn primary desktop-only" data-act="new-note">${icon('notebook-pen')}Nueva nota</button>`);
   const kind = () => (filter.view === 'trash' ? 'notes' : filter.view);
+  // El nombre de un cuaderno tal como se lee en la vista abierta (o para una nota o tarea concreta).
+  const nameOf = (b, todo = kind() === 'todo') => (b ? bookName(b.name, todo) : '');
   const setFab = () => ctx.setFab?.(kind() === 'todo'
     ? { label: 'Nueva tarea', run: () => newNote({ todo: true }) }
     : { label: 'Nueva nota', run: () => newNote() });
@@ -88,7 +95,7 @@ export default async function notesView(ctx) {
     if (q) return `Buscar «${q}»`;
     if (filter.view === 'trash') return 'Papelera';
     if (filter.tag) return `#${filter.tag}`;
-    if (filter.book) return bookOf(filter.book)?.name || 'Cuaderno';
+    if (filter.book) return nameOf(bookOf(filter.book)) || 'Cuaderno';
     return filter.view === 'todo' ? 'Tareas' : 'Notas';
   };
   const countText = () => {
@@ -170,8 +177,9 @@ export default async function notesView(ctx) {
     const ids = new Set(books.map((b) => b.id));
     const rows = (pid, depth) => books.filter((b) => (b.parent_id && ids.has(b.parent_id) ? b.parent_id : null) === pid)
       .flatMap((b) => [html`<div class="nb-row ${filter.book === b.id ? 'on' : ''}" style="--d:${depth}">
-        <button type="button" class="nb-item" data-book="${b.id}"><span class="emoji">${b.icon}</span><span class="grow ellipsis">${b.name}</span><span class="n">${b.n || ''}</span></button>
-        ${canWriteBook(b) ? html`<button type="button" class="nb-more" data-bookmenu="${b.id}" aria-label="Opciones de ${b.name}">${icon('ellipsis', 'sm')}</button>` : ''}
+        <button type="button" class="nb-item" data-book="${b.id}"><span class="emoji">${b.icon}</span><span class="grow ellipsis">${nameOf(b)}</span>
+          <span class="n">${(kind() === 'todo' ? b.todo : b.notes) || ''}</span></button>
+        ${canWriteBook(b) ? html`<button type="button" class="nb-more" data-bookmenu="${b.id}" aria-label="Opciones de ${nameOf(b)}">${icon('ellipsis', 'sm')}</button>` : ''}
       </div>`, ...rows(b.id, depth + 1)]);
     return rows(null, 0);
   }
@@ -403,7 +411,7 @@ export default async function notesView(ctx) {
     const chip = (attr, val, label, on, extra = '') => html`<button type="button" class="chip" ${raw(attr)}="${val}" aria-pressed="${String(on)}">${extra}${label}</button>`;
     return html`<div class="chips scroll nl-chips">
       ${chip('data-allbooks', '1', 'Todas', !filter.book && !filter.tag && filter.view !== 'trash')}
-      ${meta.books.filter((b) => !b.parent_id).map((b) => chip('data-book', b.id, b.name, filter.book === b.id, html`<span class="emoji">${b.icon}</span>`))}
+      ${meta.books.filter((b) => !b.parent_id).map((b) => chip('data-book', b.id, nameOf(b), filter.book === b.id, html`<span class="emoji">${b.icon}</span>`))}
       <button type="button" class="chip" data-act="books-sheet">${icon('folder-open', 'sm')}Más</button>
     </div>`;
   }
@@ -425,7 +433,7 @@ export default async function notesView(ctx) {
       <input class="input" name="title" maxlength="200" placeholder="Apunta una tarea…" aria-label="Nueva tarea" enterkeyhint="done">
       <button type="submit" class="btn primary icon-only" aria-label="Añadir la tarea">${icon('plus')}</button>
     </form>
-    <p class="nl-qhint">Se apunta en ${b.icon} <b>${b.name}</b> · ${b.private ? 'solo la verás tú' : 'la verá todo el hogar'}</p>`;
+    <p class="nl-qhint">Se apunta en ${b.icon} <b>${nameOf(b, true)}</b> · ${b.private ? 'solo la verás tú' : 'la verá todo el hogar'}</p>`;
   }
   // Las tareas, por cuándo tocan; las hechas, plegadas al final (para poder desmarcarlas).
   function taskGroups() {
@@ -466,7 +474,7 @@ export default async function notesView(ctx) {
         <span class="nl-meta">
           ${due ? html`<span class="pill ${due.late ? 'overdue' : due.soon ? 'pending' : 'plain'}">${icon('clock', 'sm')}${due.text}</span>` : ''}
           <span>${timeAgo(n.updated_at)}</span>
-          ${showBook && book ? html`<span class="nl-book">${n.private ? icon('lock', 'sm') : ''}${book.name}</span>` : n.private ? html`<span class="nl-book">${icon('lock', 'sm')}Privada</span>` : ''}
+          ${showBook && book ? html`<span class="nl-book">${n.private ? icon('lock', 'sm') : ''}${nameOf(book, !!n.is_todo)}</span>` : n.private ? html`<span class="nl-book">${icon('lock', 'sm')}Privada</span>` : ''}
           ${n.tags.slice(0, 3).map((t) => html`<span class="nl-tag">#${t}</span>`)}
         </span>
       </button>
@@ -485,7 +493,7 @@ export default async function notesView(ctx) {
       </div>
       ${q || trash ? '' : kindSwitch()}
       <div class="nl-tools">
-        <div class="input-group">${icon('search')}<input class="input" type="search" placeholder="Buscar en las notas…" value="${q}" data-q aria-label="Buscar en las notas"></div>
+        <div class="input-group">${icon('search')}<input class="input" type="search" placeholder="Buscar en notas y tareas…" value="${q}" data-q aria-label="Buscar en notas y tareas"></div>
         <button type="button" class="btn icon-only" data-act="sort" aria-label="Ordenar: ${SORTS[sort]}">${icon('arrow-down-up')}</button>
       </div>
       ${isWide ? '' : quickChips()}
@@ -530,8 +538,8 @@ export default async function notesView(ctx) {
     pane.innerHTML = String(html`<div class="ne ${ro ? 'ro' : ''}" data-m="${m}">
       <div class="ne-bar">
         ${isWide ? '' : html`<button type="button" class="btn ghost sm ne-back" data-act="back" aria-label="Volver a la lista">${icon('chevron-left', 'sm')}<span>${kind() === 'todo' ? 'Tareas' : 'Notas'}</span></button>`}
-        <button type="button" class="ne-book ${note.private ? 'priv' : ''}" data-act="move" ${ro ? 'disabled' : ''} aria-label="Cuaderno: ${book?.name || ''} (${note.private ? 'solo tú' : 'todo el hogar'}). Cambiar">
-          <span class="emoji">${book?.icon || '📒'}</span><span class="ellipsis">${book?.name || 'Cuaderno'}</span>
+        <button type="button" class="ne-book ${note.private ? 'priv' : ''}" data-act="move" ${ro ? 'disabled' : ''} aria-label="Cuaderno: ${nameOf(book, !!note.is_todo)} (${note.private ? 'solo tú' : 'todo el hogar'}). Cambiar">
+          <span class="emoji">${book?.icon || '📒'}</span><span class="ellipsis">${nameOf(book, !!note.is_todo) || 'Cuaderno'}</span>
           <span class="ne-who">${note.private ? html`${icon('lock', 'sm')}Solo tú` : html`${icon('users', 'sm')}Todo el hogar`}</span></button>
         <span class="spacer"></span>
         ${ro ? '' : html`<div class="segmented ne-mode" role="group" aria-label="Modo">
@@ -908,12 +916,12 @@ export default async function notesView(ctx) {
   // Mover la nota a otro cuaderno (avisando si cambia quién la ve).
   function moveMenu(anchor) {
     const item = (b) => ({
-      label: `${b.icon}  ${b.name}`, checked: b.id === note.book_id, onClick: async () => {
+      label: `${b.icon}  ${nameOf(b, !!note.is_todo)}`, checked: b.id === note.book_id, onClick: async () => {
         if (b.id === note.book_id) return;
         // Una nota recién empezada se mueve sin preguntar; una con contenido, avisando de quién la verá.
         const started = note.id || note.title || note.body;
         if (started && !b.private && note.private) {
-          const ok = await confirmDialog({ title: '¿Compartir esta nota con el hogar?', text: `En «${b.name}» la podrá ver toda la familia, también sus imágenes.`, confirm: 'Compartir' });
+          const ok = await confirmDialog({ title: note.is_todo ? '¿Compartir esta tarea con el hogar?' : '¿Compartir esta nota con el hogar?', text: `En «${nameOf(b, !!note.is_todo)}» la podrá ver toda la familia${note.is_todo ? '' : ', también sus imágenes'}.`, confirm: 'Compartir' });
           if (!ok) return;
         } else if (started && b.private && !note.private) {
           const ok = await confirmDialog({ title: '¿Hacerla privada?', text: 'Dejará de verla el resto del hogar.', confirm: 'Hacer privada' });
@@ -922,7 +930,7 @@ export default async function notesView(ctx) {
         touch({ book_id: b.id, private: b.private ? 1 : 0 });
         await save();
         drawEditor();
-        toast(b.private ? `Movida a «${b.name}» (solo tú)` : `Movida a «${b.name}» (todo el hogar)`);
+        toast(`Movida a «${nameOf(b, !!note.is_todo)}» (${b.private ? 'solo tú' : 'todo el hogar'})`);
       },
     });
     const shared = meta.books.filter((b) => !b.private && meta.can_share);

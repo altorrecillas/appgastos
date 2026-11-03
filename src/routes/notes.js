@@ -92,7 +92,9 @@ r.get('/meta', (req, res) => {
   const me = req.user.id;
   const books = all(
     `SELECT b.id, b.name, b.icon, b.parent_id, b.sort, b.owner_id IS NOT NULL AS private,
-        (SELECT COUNT(*) FROM notes n WHERE n.book_id = b.id AND n.deleted_at IS NULL) AS n
+        (SELECT COUNT(*) FROM notes n WHERE n.book_id = b.id AND n.deleted_at IS NULL) AS n,
+        (SELECT COUNT(*) FROM notes n WHERE n.book_id = b.id AND n.deleted_at IS NULL AND n.is_todo = 0) AS notes,
+        (SELECT COUNT(*) FROM notes n WHERE n.book_id = b.id AND n.deleted_at IS NULL AND n.is_todo = 1 AND n.done_at IS NULL) AS todo
        FROM note_books b WHERE b.household_id = ? AND ${MINE.replace(/owner_id/g, 'b.owner_id')}
       ORDER BY b.owner_id IS NOT NULL, b.sort, norm(b.name)`,
     req.hid, me,
