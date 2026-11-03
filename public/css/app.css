@@ -2484,6 +2484,7 @@ html { -webkit-tap-highlight-color: transparent; }
 /* Lista */
 .nl-head { display: flex; align-items: center; gap: 10px; padding: 16px 16px 4px; }
 .nl-head h2 { font-size: calc(19px * var(--fs)); font-weight: 720; font-stretch: 86%; letter-spacing: -0.01em; }
+.nl-head.plain { padding-bottom: 0; }
 .nl-tools { display: flex; gap: 8px; padding: 8px 16px 10px; }
 .nl-tools .input-group { flex: 1; max-width: none; }
 .nl-list { padding: 0 8px 12px; }
@@ -2526,6 +2527,34 @@ html { -webkit-tap-highlight-color: transparent; }
 .nl-empty .art { font-size: calc(40px * var(--fs)); line-height: 1; }
 .nl-empty h3 { color: var(--ink); font-size: calc(17px * var(--fs)); }
 .nl-empty p { max-width: 40ch; }
+/* Notas | Tareas: lo elegido, en azul. */
+.nl-kind { margin: 6px 16px 4px; }
+.nl-kind button { height: 36px; gap: 7px; }
+.nl-kind button[aria-pressed='true'] { background: var(--cobalt); color: #fff; box-shadow: var(--shadow-1); }
+.nl-badge {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-grid; place-items: center;
+  font-size: calc(11.5px * var(--fs)); font-weight: 700; background: var(--cobalt-soft); color: var(--cobalt); font-variant-numeric: tabular-nums;
+}
+.nl-kind button[aria-pressed='true'] .nl-badge { background: rgba(255, 255, 255, 0.24); color: #fff; }
+/* Apuntar una tarea al momento */
+.nl-quick { display: flex; gap: 8px; margin: 2px 16px 0; }
+.nl-quick .input { flex: 1; min-width: 0; }
+.nl-qhint { margin: 6px 16px 10px; font-size: calc(12px * var(--fs)); color: var(--ink-3); }
+.nl-qhint b { color: var(--ink-2); font-weight: 600; }
+/* Las tareas por cuándo tocan */
+.nl-group + .nl-group, .nl-group + .nl-done-toggle, .nl-alldone + .nl-done-toggle { margin-top: 6px; }
+.nl-gh {
+  display: flex; align-items: center; gap: 8px; padding: 12px 12px 4px; font-size: calc(12.5px * var(--fs)); font-weight: 700; color: var(--ink-2);
+}
+.nl-gh span { color: var(--ink-3); font-weight: 600; }
+.nl-group.late .nl-gh { color: var(--granada); }
+.nl-alldone { display: flex; align-items: center; gap: 8px; padding: 14px 12px; color: var(--pine); font-weight: 600; font-size: calc(14px * var(--fs)); }
+.nl-done-toggle {
+  display: flex; align-items: center; gap: 6px; width: 100%; padding: 10px 12px; border: 0; background: none; border-radius: 12px; cursor: pointer;
+  font-size: calc(13px * var(--fs)); font-weight: 650; color: var(--ink-2); text-align: left;
+}
+.nl-done-toggle:hover { background: var(--surface-2); }
+.nl-done-toggle span { color: var(--ink-3); font-weight: 600; }
 .nl-chips { margin: 0 0 12px; }
 .nl-chips .badge { margin-right: 2px; }
 
@@ -2644,6 +2673,10 @@ kbd {
 @media (max-width: 1023px) {
   .notes.narrow .nl-head { padding: 2px 0 4px; }
   .notes.narrow .nl-tools { padding: 6px 0 10px; }
+  .notes.narrow .nl-kind { margin: 6px 0 6px; }
+  .notes.narrow .nl-nudge { margin-top: 12px; }
+  .notes.narrow .nl-quick { margin: 0; }
+  .notes.narrow .nl-qhint { margin: 6px 2px 12px; }
   .notes.narrow .nl-list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); padding: 4px; }
   .notes.narrow .nl-list:has(.nl-empty) { padding: 0; }
   .notes.narrow .ne { border: 1px solid var(--line); border-radius: var(--r-l); overflow: clip; min-height: calc(100dvh - 210px); }

@@ -3,6 +3,14 @@
 Cada mejora sube la versión (`npm run subir-version -- "Novedad" …`). La app la enseña en *Ajustes → Aplicación*
 y avisa en los móviles cuando hay una nueva.
 
+## 0.51 — 2026-11-03
+
+- Notas: arriba de la lista hay un interruptor «Notas | Tareas» que marca en azul lo que estás viendo y cambia de verdad la lista: en Notas solo salen las notas y en Tareas solo las tareas. Los cuadernos y las etiquetas filtran dentro de cada una.
+- En Notas, el «+» de abajo crea una nota (o una tarea, si estás en Tareas) en vez de un gasto, y lo mismo la tecla N en el ordenador. En el móvil ya no están los dos iconos de arriba que parecían pestañas.
+- Tareas ordenadas por cuándo tocan: vencidas, hoy, próximos 7 días, más adelante y sin fecha. Las hechas se guardan plegadas al final para poder desmarcarlas.
+- Para apuntar una tarea rápida basta con escribirla arriba y pulsar Intro, sin abrir el editor; la casilla queda lista para la siguiente y dice en qué cuaderno se guarda (y si la verá todo el hogar).
+- Los interruptores y casillas de toda la app dicen bien a los lectores de pantalla si están activados o no.
+
 ## 0.50 — 2026-11-02
 
 - El inicio, a gusto de cada persona: con «Personalizar el inicio» (al final del inicio, o en Más → Cómo se ve) se cambia el orden de todo lo que sale (el resumen del mes, las cifras, en qué se va el dinero, los próximos pagos, la lista de la compra…) y se ocultan los bloques que no se usan.

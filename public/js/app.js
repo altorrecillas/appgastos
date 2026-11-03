@@ -328,7 +328,8 @@ function bindShell() {
       longPressed = false;
       return;
     }
-    openTxForm();
+    if (current.fab) current.fab.run();
+    else openTxForm();
   });
   on(appEl, 'click', '[data-act=quick]', () => quickMenu());
   on(appEl, 'click', '[data-act=add-income]', () => openTxForm({ kind: 'income' }));
@@ -868,7 +869,8 @@ async function route() {
     } catch { /* nada */ }
   });
   disposeCharts(viewEl);
-  current = { name, cleanups: [], refresh: null, token };
+  current = { name, cleanups: [], refresh: null, token, fab: null };
+  paintFab();
   // En la barra del móvil, Productos es parte de la Compra (se abre desde ella).
   const tab = TAB_PARENT[name] && TAB_ROUTES().includes(TAB_PARENT[name]) ? TAB_PARENT[name] : name;
   $$('[data-nav]').forEach((a) => {
@@ -900,6 +902,12 @@ async function route() {
       navigate,
       onCleanup: (fn) => current.cleanups.push(fn),
       setRefresh: (fn) => (current.refresh = fn),
+      // El «+» de abajo (y la tecla N) hace lo propio de la sección: { label, run } (en Notas, una nota o una tarea).
+      setFab: (fab) => {
+        if (token !== current.token) return;
+        current.fab = fab;
+        paintFab();
+      },
       isCurrent: () => token === current.token,
     };
     await mod.default(ctx);
@@ -942,6 +950,15 @@ window.addEventListener('scroll', () => {
 }, { passive: true });
 
 // Cambios hechos desde esta pestaña → refresca la vista y los avisos.
+// El «+» de la barra del móvil dice lo que va a hacer (para quien usa un lector de pantalla y en la pista al pasar).
+function paintFab() {
+  const b = document.querySelector('.tabbar [data-act=add]');
+  if (!b) return;
+  const label = current.fab?.label || 'Anotar gasto';
+  b.setAttribute('aria-label', label);
+  b.title = label;
+}
+
 const refreshCurrent = debounce((detail) => {
   current.refresh?.(detail);
   refreshAlertsSoon();
@@ -1026,7 +1043,8 @@ document.addEventListener('keydown', (e) => {
   if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === 'n' && can('edit')) {
     e.preventDefault();
-    openTxForm();
+    if (current.fab) current.fab.run();
+    else openTxForm();
   } else if (e.key === 'i' && can('edit')) {
     e.preventDefault();
     openTxForm({ kind: 'income' });

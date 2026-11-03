@@ -19,9 +19,15 @@ const renderVal = (v) => {
   if (Array.isArray(v)) return v.map(renderVal).join('');
   return esc(v);
 };
+// Dentro de aria-pressed="…", aria-checked="…"… un sí/no se escribe «true»/«false» (vacío no lo entiende un lector de
+// pantalla); en el resto, false no pinta nada (para poder escribir ${cond && …}).
+const ARIA = /aria-[a-z]+="$/;
 export function html(strings, ...vals) {
   let out = strings[0];
-  for (let i = 0; i < vals.length; i++) out += renderVal(vals[i]) + strings[i + 1];
+  for (let i = 0; i < vals.length; i++) {
+    const v = vals[i];
+    out += (typeof v === 'boolean' && ARIA.test(strings[i]) ? String(v) : renderVal(v)) + strings[i + 1];
+  }
   return new Raw(out);
 }
 export const icon = (name, cls = '') =>

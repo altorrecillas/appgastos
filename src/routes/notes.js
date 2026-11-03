@@ -104,12 +104,14 @@ r.get('/meta', (req, res) => {
   );
   const c = one(
     `SELECT SUM(deleted_at IS NULL) AS total, SUM(deleted_at IS NULL AND is_todo = 1 AND done_at IS NULL) AS todo,
+        SUM(deleted_at IS NULL AND is_todo = 0) AS notes, SUM(deleted_at IS NULL AND is_todo = 1 AND done_at IS NOT NULL) AS done,
         SUM(deleted_at IS NOT NULL) AS trash, SUM(deleted_at IS NULL AND owner_id IS NOT NULL) AS private
        FROM notes WHERE household_id = ? AND ${MINE}`,
     req.hid, me,
   );
   res.json({
-    books, tags, counts: { total: c.total || 0, todo: c.todo || 0, trash: c.trash || 0, private: c.private || 0 },
+    books, tags,
+    counts: { total: c.total || 0, notes: c.notes || 0, todo: c.todo || 0, done: c.done || 0, trash: c.trash || 0, private: c.private || 0 },
     can_share: isEditor(req), last_backup: lastBackup(req),
   });
 });
@@ -217,7 +219,9 @@ r.get('/', (req, res) => {
   const args = [req.hid, me];
   const view = String(req.query.view || 'all');
   where.push(view === 'trash' ? 'n.deleted_at IS NOT NULL' : 'n.deleted_at IS NULL');
+  // «notes»: solo las notas; «todo»: solo las tareas (las pendientes primero); «all»: todo junto.
   if (view === 'todo') where.push('n.is_todo = 1');
+  if (view === 'notes') where.push('n.is_todo = 0');
   if (view === 'private') where.push('n.owner_id IS NOT NULL');
   if (req.query.book) {
     where.push('n.book_id = ?');
